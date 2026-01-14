@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Finance Tracker</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+
+        header p {
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.85rem;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .stat-card .value.expense { color: #e53e3e; }
+        .stat-card .value.income { color: #38a169; }
+        .stat-card .value.net.positive { color: #38a169; }
+        .stat-card .value.net.negative { color: #e53e3e; }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .control-group input,
+        .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #5a6fd6;
+        }
+
+        button.secondary {
+            background: #718096;
+        }
+
+        button.secondary:hover {
+            background: #4a5568;
+        }
+
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .preset-btn {
+            padding: 6px 14px;
+            background: #f0f0f0;
+            color: #555;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: #e0e0e0;
+            border-color: #ccc;
+        }
+
+        .preset-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .preset-label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .upload-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .upload-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .upload-form input[type="file"] {
+            flex: 1;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .amount {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-weight: 500;
+        }
+
+        .amount.expense {
+            color: #e53e3e;
+        }
+
+        .amount.income {
+            color: #38a169;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge.internal {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .badge.usd {
+            background: #bee3f8;
+            color: #2b6cb0;
+        }
+
+        .badge.ai {
+            background: #d6bcfa;
+            color: #6b46c1;
+        }
+
+        .category-cell {
+            position: relative;
+            cursor: pointer;
+            min-width: 120px;
+        }
+
+        .category-cell:hover {
+            background: #edf2f7;
+        }
+
+        .category-select {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            background: white;
+            cursor: pointer;
+            max-width: 140px;
+        }
+
+        .category-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .uncategorized {
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        .ai-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .ai-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 10px 20px;
+            font-weight: 500;
+        }
+
+        .ai-btn:hover {
+            opacity: 0.9;
+        }
+
+        .ai-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .ai-status {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .ai-status strong {
+            color: #e53e3e;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 15px;
+        }
+
+        .modal-content p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .modal-content .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        .delete-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .delete-btn {
+            background: #e53e3e;
+            padding: 8px 16px;
+        }
+
+        .delete-btn:hover {
+            background: #c53030;
+        }
+
+        .delete-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .selection-info {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .selection-info strong {
+            color: #e53e3e;
+        }
+
+        .row-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .delete-icon {
+            color: #e53e3e;
+            cursor: pointer;
+            opacity: 0.6;
+            font-size: 1.1rem;
+        }
+
+        .delete-icon:hover {
+            opacity: 1;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .pagination a {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+        }
+
+        .pagination a:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .pagination a.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .pagination span {
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .message.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .message.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .truncate {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 768px) {
+            .controls-row {
+                flex-direction: column;
+            }
+
+            .control-group {
+                width: 100%;
+            }
+
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.85rem;
+            }
+
+            .truncate {
+                max-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Personal Finance Tracker</h1>
+            <p>Track and analyze your bank transactions</p>
+        </header>
+
+        <div id="message"></div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Expenses</h3>
+                <div class="value expense">{{ "{:,.2f}".format(total_expenses) }} GEL</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Income</h3>
+                <div class="value income">{{ "{:,.2f}".format(total_income) }} GEL</div>
+            </div>
+            <div class="stat-card">
+                <h3>Net Balance</h3>
+                <div class="value net {% if net >= 0 %}positive{% else %}negative{% endif %}">
+                    {{ "{:,.2f}".format(net) }} GEL
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>Transactions</h3>
+                <div class="value">{{ total }}</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <form method="GET" action="/" id="filterForm">
+                <div class="preset-label">Quick Filters</div>
+                <div class="preset-buttons">
+                    <button type="button" class="preset-btn" data-preset="today">Today</button>
+                    <button type="button" class="preset-btn" data-preset="last7">Last 7 Days</button>
+                    <button type="button" class="preset-btn" data-preset="last30">Last 30 Days</button>
+                    <button type="button" class="preset-btn" data-preset="thisMonth">This Month</button>
+                    <button type="button" class="preset-btn" data-preset="lastMonth">Last Month</button>
+                    <button type="button" class="preset-btn" data-preset="thisYear">This Year</button>
+                    <button type="button" class="preset-btn" data-preset="allTime">All Time</button>
+                </div>
+                <input type="hidden" id="preset" name="preset" value="{{ preset if preset else '' }}">
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label for="start_date">From Date</label>
+                        <input type="date" id="start_date" name="start_date"
+                               value="{{ start_date if start_date else '' }}">
+                    </div>
+                    <div class="control-group">
+                        <label for="end_date">To Date</label>
+                        <input type="date" id="end_date" name="end_date"
+                               value="{{ end_date if end_date else '' }}">
+                    </div>
+                    <div class="control-group">
+                        <label for="source_account">Account</label>
+                        <select id="source_account" name="source_account">
+                            <option value="">All Accounts</option>
+                            {% for account in accounts %}
+                            <option value="{{ account }}"
+                                    {% if source_account == account %}selected{% endif %}>
+                                {{ account }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>&nbsp;</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="include_internal" name="include_internal"
+                                   {% if include_internal %}checked{% endif %}>
+                            <label for="include_internal">Show Internal Transfers</label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>&nbsp;</label>
+                        <button type="submit">Apply Filters</button>
+                    </div>
+                    <div class="control-group">
+                        <label>&nbsp;</label>
+                        <a href="/"><button type="button" class="secondary">Reset</button></a>
+                    </div>
+                </div>
+            </form>
+
+            <div class="upload-section">
+                <form class="upload-form" id="uploadForm" enctype="multipart/form-data">
+                    <input type="file" id="csvFile" name="file" accept=".csv" multiple required>
+                    <button type="submit" id="uploadBtn">Upload CSV(s)</button>
+                    <span id="uploadStatus" style="margin-left: 10px; color: #666;"></span>
+                </form>
+            </div>
+
+            <div class="ai-section">
+                <button type="button" class="ai-btn" id="aiCategorizeBtn" {% if uncategorized_count == 0 %}disabled{% endif %}>
+                    Auto-Categorize with AI
+                </button>
+                <button type="button" class="ai-btn" id="aiCancelBtn" style="display: none; background: #e53e3e;">
+                    Cancel
+                </button>
+                <div class="ai-status">
+                    <strong id="uncategorizedCount">{{ uncategorized_count }}</strong> uncategorized transactions
+                </div>
+                <div id="aiProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <span id="progressText">Processing...</span>
+                </div>
+            </div>
+
+            <div class="delete-section">
+                <button type="button" class="delete-btn" id="deleteSelectedBtn" disabled>
+                    Delete Selected
+                </button>
+                <button type="button" class="delete-btn" id="deleteAllBtn">
+                    Delete All
+                </button>
+                <div class="selection-info">
+                    <strong id="selectedCount">0</strong> selected
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            {% if transactions %}
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAll" class="row-checkbox"></th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Amount (GEL)</th>
+                        <th>Category</th>
+                        <th>Subcategory</th>
+                        <th>Partner</th>
+                        <th>Flags</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in transactions %}
+                    <tr data-id="{{ txn.id }}">
+                        <td><input type="checkbox" class="row-checkbox txn-checkbox" data-id="{{ txn.id }}"></td>
+                        <td>{{ txn.date.strftime('%d/%m/%Y') }}</td>
+                        <td class="truncate" title="{{ txn.description }}">
+                            {{ txn.description or '-' }}
+                        </td>
+                        <td class="amount {% if txn.is_expense %}expense{% else %}income{% endif %}">
+                            {% if txn.is_expense %}-{% else %}+{% endif %}{{ "{:,.2f}".format(txn.amount_gel) }}
+                        </td>
+                        <td class="category-cell">
+                            <select class="category-select" data-txn-id="{{ txn.id }}" data-type="category">
+                                <option value="" {% if not txn.category %}selected{% endif %}>-- Select --</option>
+                                {% for cat in categories.keys() %}
+                                <option value="{{ cat }}" {% if txn.category == cat %}selected{% endif %}>{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="category-cell">
+                            <select class="category-select subcategory-select" data-txn-id="{{ txn.id }}" data-type="subcategory" data-category="{{ txn.category or '' }}">
+                                <option value="" {% if not txn.subcategory %}selected{% endif %}>-- Select --</option>
+                                {% if txn.category and txn.category in categories %}
+                                    {% for sub in categories[txn.category] %}
+                                    <option value="{{ sub }}" {% if txn.subcategory == sub %}selected{% endif %}>{{ sub }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        </td>
+                        <td class="truncate" title="{{ txn.partner_name }}">
+                            {{ txn.partner_name or '-' }}
+                        </td>
+                        <td>
+                            {% if txn.is_internal_transfer %}
+                                <span class="badge internal">Internal</span>
+                            {% endif %}
+                            {% if txn.amount_usd %}
+                                <span class="badge usd">USD</span>
+                            {% endif %}
+                            {% if txn.ai_categorized %}
+                                <span class="badge ai">AI</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="delete-icon" data-id="{{ txn.id }}" title="Delete">&#128465;</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="?page={{ page - 1 }}&limit={{ limit }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if include_internal %}&include_internal=true{% endif %}{% if source_account %}&source_account={{ source_account }}{% endif %}">
+                        Previous
+                    </a>
+                {% else %}
+                    <a class="disabled">Previous</a>
+                {% endif %}
+
+                <span>Page {{ page }} of {{ total_pages }}</span>
+
+                {% if page < total_pages %}
+                    <a href="?page={{ page + 1 }}&limit={{ limit }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if include_internal %}&include_internal=true{% endif %}{% if source_account %}&source_account={{ source_account }}{% endif %}">
+                        Next
+                    </a>
+                {% else %}
+                    <a class="disabled">Next</a>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h2>No Transactions Found</h2>
+                <p>Upload a CSV file to get started, or adjust your filters.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <h3 id="deleteModalTitle">Confirm Delete</h3>
+            <p id="deleteModalMessage">Are you sure you want to delete this transaction?</p>
+            <div class="btn-group">
+                <button type="button" class="secondary" id="deleteCancelBtn">Cancel</button>
+                <button type="button" class="btn-danger" id="deleteConfirmBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Session storage keys
+        const SESSION_KEYS = {
+            PRESET: 'pf_preset',
+            START_DATE: 'pf_start_date',
+            END_DATE: 'pf_end_date',
+            ACCOUNT: 'pf_account',
+            INCLUDE_INTERNAL: 'pf_include_internal'
+        };
+
+        // Date utility functions
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function getPresetDates(preset) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+
+            switch(preset) {
+                case 'today':
+                    return { start: formatDate(today), end: formatDate(today) };
+
+                case 'last7':
+                    const last7 = new Date(today);
+                    last7.setDate(today.getDate() - 6);
+                    return { start: formatDate(last7), end: formatDate(today) };
+
+                case 'last30':
+                    const last30 = new Date(today);
+                    last30.setDate(today.getDate() - 29);
+                    return { start: formatDate(last30), end: formatDate(today) };
+
+                case 'thisMonth':
+                    const monthStart = new Date(year, month, 1);
+                    return { start: formatDate(monthStart), end: formatDate(today) };
+
+                case 'lastMonth':
+                    const lastMonthStart = new Date(year, month - 1, 1);
+                    const lastMonthEnd = new Date(year, month, 0);
+                    return { start: formatDate(lastMonthStart), end: formatDate(lastMonthEnd) };
+
+                case 'thisYear':
+                    const yearStart = new Date(year, 0, 1);
+                    return { start: formatDate(yearStart), end: formatDate(today) };
+
+                case 'allTime':
+                    return { start: '', end: '' };
+
+                default:
+                    return { start: '', end: '' };
+            }
+        }
+
+        // Save filters to session storage
+        function saveFiltersToSession() {
+            const preset = document.getElementById('preset').value;
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            const account = document.getElementById('source_account').value;
+            const includeInternal = document.getElementById('include_internal').checked;
+
+            sessionStorage.setItem(SESSION_KEYS.PRESET, preset);
+            sessionStorage.setItem(SESSION_KEYS.START_DATE, startDate);
+            sessionStorage.setItem(SESSION_KEYS.END_DATE, endDate);
+            sessionStorage.setItem(SESSION_KEYS.ACCOUNT, account);
+            sessionStorage.setItem(SESSION_KEYS.INCLUDE_INTERNAL, includeInternal);
+        }
+
+        // Load filters from session storage
+        function loadFiltersFromSession() {
+            return {
+                preset: sessionStorage.getItem(SESSION_KEYS.PRESET),
+                startDate: sessionStorage.getItem(SESSION_KEYS.START_DATE),
+                endDate: sessionStorage.getItem(SESSION_KEYS.END_DATE),
+                account: sessionStorage.getItem(SESSION_KEYS.ACCOUNT),
+                includeInternal: sessionStorage.getItem(SESSION_KEYS.INCLUDE_INTERNAL)
+            };
+        }
+
+        // Check if this is the first visit (no session data)
+        function isFirstVisit() {
+            return sessionStorage.getItem(SESSION_KEYS.PRESET) === null;
+        }
+
+        // Apply a preset
+        function applyPreset(preset) {
+            const dates = getPresetDates(preset);
+
+            document.getElementById('start_date').value = dates.start;
+            document.getElementById('end_date').value = dates.end;
+            document.getElementById('preset').value = preset;
+
+            highlightActivePreset(preset);
+            saveFiltersToSession();
+        }
+
+        // Highlight the active preset button
+        function highlightActivePreset(activePreset) {
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.preset === activePreset) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // Detect which preset matches current dates
+        function detectPresetFromDates(startDate, endDate) {
+            const presets = ['today', 'last7', 'last30', 'thisMonth', 'lastMonth', 'thisYear', 'allTime'];
+
+            for (const preset of presets) {
+                const dates = getPresetDates(preset);
+                if (dates.start === startDate && dates.end === endDate) {
+                    return preset;
+                }
+            }
+            return 'custom';
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasUrlParams = urlParams.has('start_date') || urlParams.has('end_date') ||
+                                 urlParams.has('source_account') || urlParams.has('preset');
+
+            if (!hasUrlParams) {
+                // No URL params - check session or apply default
+                if (isFirstVisit()) {
+                    // First visit - apply "This Month" and redirect
+                    applyPreset('thisMonth');
+                    document.getElementById('filterForm').submit();
+                    return;
+                } else {
+                    // Return visit without params - restore from session
+                    const saved = loadFiltersFromSession();
+                    if (saved.preset && saved.preset !== 'custom') {
+                        applyPreset(saved.preset);
+                        document.getElementById('source_account').value = saved.account || '';
+                        document.getElementById('include_internal').checked = saved.includeInternal === 'true';
+                        document.getElementById('filterForm').submit();
+                        return;
+                    }
+                }
+            }
+
+            // URL has params - detect and highlight preset
+            const currentStart = document.getElementById('start_date').value;
+            const currentEnd = document.getElementById('end_date').value;
+            const detectedPreset = detectPresetFromDates(currentStart, currentEnd);
+
+            highlightActivePreset(detectedPreset);
+            document.getElementById('preset').value = detectedPreset;
+
+            // Save current state to session
+            saveFiltersToSession();
+        });
+
+        // Preset button click handlers
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const preset = this.dataset.preset;
+                applyPreset(preset);
+                document.getElementById('filterForm').submit();
+            });
+        });
+
+        // Save to session when form is submitted
+        document.getElementById('filterForm').addEventListener('submit', function() {
+            // Clear preset if dates were manually changed
+            const currentStart = document.getElementById('start_date').value;
+            const currentEnd = document.getElementById('end_date').value;
+            const currentPreset = document.getElementById('preset').value;
+
+            if (currentPreset && currentPreset !== 'custom') {
+                const presetDates = getPresetDates(currentPreset);
+                if (presetDates.start !== currentStart || presetDates.end !== currentEnd) {
+                    document.getElementById('preset').value = 'custom';
+                }
+            }
+
+            saveFiltersToSession();
+        });
+
+        // Upload form handler - supports multiple files
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('csvFile');
+            const files = fileInput.files;
+            const uploadBtn = document.getElementById('uploadBtn');
+            const uploadStatus = document.getElementById('uploadStatus');
+
+            if (!files || files.length === 0) {
+                showMessage('Please select at least one file', 'error');
+                return;
+            }
+
+            // Disable button during upload
+            uploadBtn.disabled = true;
+            const originalText = uploadBtn.textContent;
+
+            // Track aggregate results
+            let totalNew = 0;
+            let totalDuplicates = 0;
+            let totalFiles = files.length;
+            let successfulFiles = 0;
+            let errors = [];
+
+            // Upload files one by one
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                uploadBtn.textContent = `Uploading ${i + 1}/${totalFiles}...`;
+                uploadStatus.textContent = file.name;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('/upload/', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        totalNew += data.new_transactions;
+                        totalDuplicates += data.duplicates_skipped;
+                        successfulFiles++;
+                    } else {
+                        errors.push(`${file.name}: ${data.detail || 'Upload failed'}`);
+                    }
+                } catch (error) {
+                    errors.push(`${file.name}: ${error.message}`);
+                }
+            }
+
+            // Reset button
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = originalText;
+            uploadStatus.textContent = '';
+
+            // Show results
+            if (successfulFiles > 0) {
+                let message = `Uploaded ${successfulFiles}/${totalFiles} file(s): ` +
+                    `${totalNew} new transactions, ${totalDuplicates} duplicates skipped.`;
+
+                if (errors.length > 0) {
+                    message += ` Errors: ${errors.join('; ')}`;
+                    showMessage(message, 'error');
+                } else {
+                    showMessage(message, 'success');
+                }
+
+                // Reload page after short delay
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                showMessage(`All uploads failed: ${errors.join('; ')}`, 'error');
+            }
+        });
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        // Categories data from server
+        const CATEGORIES = {{ categories | tojson | safe }};
+
+        // Update subcategory options when category changes
+        document.querySelectorAll('.category-select[data-type="category"]').forEach(select => {
+            select.addEventListener('change', async function() {
+                const txnId = this.dataset.txnId;
+                const category = this.value;
+                const row = this.closest('tr');
+                const subcategorySelect = row.querySelector('.subcategory-select');
+
+                // Update subcategory dropdown options
+                subcategorySelect.innerHTML = '<option value="">-- Select --</option>';
+                if (category && CATEGORIES[category]) {
+                    CATEGORIES[category].forEach(sub => {
+                        const option = document.createElement('option');
+                        option.value = sub;
+                        option.textContent = sub;
+                        subcategorySelect.appendChild(option);
+                    });
+                    // Auto-select first subcategory
+                    if (CATEGORIES[category].length > 0) {
+                        subcategorySelect.value = CATEGORIES[category][0];
+                    }
+                }
+                subcategorySelect.dataset.category = category;
+
+                // Save to server
+                if (category) {
+                    await updateCategory(txnId, category, subcategorySelect.value || CATEGORIES[category][0]);
+                }
+            });
+        });
+
+        // Save when subcategory changes
+        document.querySelectorAll('.subcategory-select').forEach(select => {
+            select.addEventListener('change', async function() {
+                const txnId = this.dataset.txnId;
+                const subcategory = this.value;
+                const row = this.closest('tr');
+                const categorySelect = row.querySelector('[data-type="category"]');
+                const category = categorySelect.value;
+
+                if (category && subcategory) {
+                    await updateCategory(txnId, category, subcategory);
+                }
+            });
+        });
+
+        // Update category on server
+        async function updateCategory(txnId, category, subcategory) {
+            try {
+                const response = await fetch(`/api/transactions/${txnId}/category`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ category, subcategory })
+                });
+
+                if (response.ok) {
+                    // Update uncategorized count
+                    const statusEl = document.querySelector('.ai-status strong');
+                    if (statusEl) {
+                        const currentCount = parseInt(statusEl.textContent);
+                        if (currentCount > 0) {
+                            statusEl.textContent = currentCount - 1;
+                        }
+                    }
+                } else {
+                    const data = await response.json();
+                    showMessage(data.detail || 'Failed to update category', 'error');
+                }
+            } catch (error) {
+                showMessage('Error updating category: ' + error.message, 'error');
+            }
+        }
+
+        // AI Categorization - with cancel support
+        let aiCancelled = false;
+
+        document.getElementById('aiCategorizeBtn')?.addEventListener('click', async function() {
+            const btn = this;
+            const cancelBtn = document.getElementById('aiCancelBtn');
+            const progressDiv = document.getElementById('aiProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+
+            aiCancelled = false;
+            btn.style.display = 'none';
+            cancelBtn.style.display = 'inline-block';
+            progressDiv.style.display = 'block';
+            progressFill.style.width = '0%';
+
+            let totalProcessed = 0;
+            let remaining = parseInt(document.getElementById('uncategorizedCount').textContent);
+            const total = remaining;
+
+            try {
+                // Process in batches so we can cancel between them
+                while (remaining > 0 && !aiCancelled) {
+                    progressText.textContent = `Processing... ${totalProcessed}/${total}`;
+
+                    const response = await fetch('/api/categorize/batch?batch_size=50', {
+                        method: 'POST'
+                    });
+
+                    if (aiCancelled) break;
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'Categorization failed');
+                    }
+
+                    totalProcessed += data.categorized;
+                    remaining = data.remaining;
+
+                    // Update progress
+                    const percent = total > 0 ? ((total - remaining) / total) * 100 : 100;
+                    progressFill.style.width = percent + '%';
+                    document.getElementById('uncategorizedCount').textContent = remaining;
+
+                    if (data.categorized === 0) break;
+                }
+
+                if (aiCancelled) {
+                    showMessage(`Cancelled. Categorized ${totalProcessed} transactions before stopping.`, 'success');
+                } else {
+                    showMessage(`Done! Categorized ${totalProcessed} transactions.`, 'success');
+                }
+
+                // Reload page to show updated categories
+                setTimeout(() => window.location.reload(), 1500);
+
+            } catch (error) {
+                showMessage('AI categorization failed: ' + error.message, 'error');
+            } finally {
+                btn.style.display = 'inline-block';
+                btn.disabled = false;
+                cancelBtn.style.display = 'none';
+                progressDiv.style.display = 'none';
+            }
+        });
+
+        document.getElementById('aiCancelBtn')?.addEventListener('click', function() {
+            aiCancelled = true;
+            this.textContent = 'Cancelling...';
+            this.disabled = true;
+        });
+
+        // === DELETE FUNCTIONALITY ===
+
+        // Track selected transactions
+        let selectedIds = new Set();
+        let pendingDeleteAction = null;  // { type: 'single'|'bulk'|'all', ids: [] }
+
+        // Update the selected count display
+        function updateSelectedCount() {
+            const countEl = document.getElementById('selectedCount');
+            const deleteBtn = document.getElementById('deleteSelectedBtn');
+            countEl.textContent = selectedIds.size;
+            deleteBtn.disabled = selectedIds.size === 0;
+        }
+
+        // Select All checkbox
+        document.getElementById('selectAll')?.addEventListener('change', function() {
+            const isChecked = this.checked;
+            document.querySelectorAll('.txn-checkbox').forEach(cb => {
+                cb.checked = isChecked;
+                const id = parseInt(cb.dataset.id);
+                if (isChecked) {
+                    selectedIds.add(id);
+                } else {
+                    selectedIds.delete(id);
+                }
+            });
+            updateSelectedCount();
+        });
+
+        // Individual checkbox selection
+        document.querySelectorAll('.txn-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const id = parseInt(this.dataset.id);
+                if (this.checked) {
+                    selectedIds.add(id);
+                } else {
+                    selectedIds.delete(id);
+                    // Uncheck "Select All" if any checkbox is unchecked
+                    document.getElementById('selectAll').checked = false;
+                }
+                updateSelectedCount();
+            });
+        });
+
+        // Modal helpers
+        const deleteModal = document.getElementById('deleteModal');
+        const deleteModalTitle = document.getElementById('deleteModalTitle');
+        const deleteModalMessage = document.getElementById('deleteModalMessage');
+
+        function showDeleteModal(title, message, action) {
+            deleteModalTitle.textContent = title;
+            deleteModalMessage.textContent = message;
+            pendingDeleteAction = action;
+            deleteModal.classList.add('active');
+        }
+
+        function hideDeleteModal() {
+            deleteModal.classList.remove('active');
+            pendingDeleteAction = null;
+        }
+
+        // Modal Cancel button
+        document.getElementById('deleteCancelBtn')?.addEventListener('click', hideDeleteModal);
+
+        // Click outside modal to close
+        deleteModal?.addEventListener('click', function(e) {
+            if (e.target === deleteModal) {
+                hideDeleteModal();
+            }
+        });
+
+        // Modal Confirm button
+        document.getElementById('deleteConfirmBtn')?.addEventListener('click', async function() {
+            if (!pendingDeleteAction) return;
+
+            this.disabled = true;
+            this.textContent = 'Deleting...';
+
+            try {
+                let response;
+
+                if (pendingDeleteAction.type === 'single') {
+                    response = await fetch(`/api/transactions/${pendingDeleteAction.ids[0]}`, {
+                        method: 'DELETE'
+                    });
+                } else if (pendingDeleteAction.type === 'bulk') {
+                    response = await fetch('/api/transactions/delete-bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: pendingDeleteAction.ids })
+                    });
+                } else if (pendingDeleteAction.type === 'all') {
+                    response = await fetch('/api/transactions/all?confirm=DELETE_ALL', {
+                        method: 'DELETE'
+                    });
+                }
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    showMessage(data.detail || 'Delete failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Delete';
+                hideDeleteModal();
+            }
+        });
+
+        // Delete Selected button
+        document.getElementById('deleteSelectedBtn')?.addEventListener('click', function() {
+            if (selectedIds.size === 0) return;
+
+            const ids = Array.from(selectedIds);
+            showDeleteModal(
+                'Delete Selected Transactions',
+                `Are you sure you want to delete ${ids.length} selected transaction(s)? This action cannot be undone.`,
+                { type: 'bulk', ids: ids }
+            );
+        });
+
+        // Delete All button
+        document.getElementById('deleteAllBtn')?.addEventListener('click', function() {
+            const total = {{ total }};
+            showDeleteModal(
+                'Delete All Transactions',
+                `Are you sure you want to delete ALL ${total} transactions? This action cannot be undone.`,
+                { type: 'all', ids: [] }
+            );
+        });
+
+        // Individual row delete icon
+        document.querySelectorAll('.delete-icon').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const id = parseInt(this.dataset.id);
+                showDeleteModal(
+                    'Delete Transaction',
+                    'Are you sure you want to delete this transaction? This action cannot be undone.',
+                    { type: 'single', ids: [id] }
+                );
+            });
+        });
+    </script>
+</body>
+</html>
