@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
-from datetime import date
+from sqlalchemy import func, desc, extract, case
+from datetime import date, timedelta
 from typing import Optional, Dict, List
 from decimal import Decimal
+from collections import defaultdict
 
 from app.database import get_db
 from app.models import Transaction
 from app.schemas import TransactionListResponse, TransactionResponse, TransactionSummary
-from app.services.categories import get_all_categories, validate_category
+from app.services.categories import get_all_categories, validate_category, CATEGORIES, get_category_color, OVERVIEW_COLORS
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -155,6 +156,186 @@ async def get_categories() -> Dict[str, List[str]]:
     Get all available categories and subcategories.
     """
     return get_all_categories()
+
+
+@router.get("/chart-data")
+async def get_chart_data(
+    start_date: Optional[date] = Query(None, description="Filter from date"),
+    end_date: Optional[date] = Query(None, description="Filter to date"),
+    granularity: str = Query("day", description="Aggregation: day, week, month"),
+    view_type: str = Query("overview", description="View: overview, expenses, income"),
+    category: Optional[str] = Query(None, description="Filter by main category (for drill-down)"),
+    subcategory: Optional[str] = Query(None, description="Filter by subcategory (for drill-down)"),
+    include_internal: bool = Query(False, description="Include internal transfers"),
+    source_account: Optional[str] = Query(None, description="Filter by account"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get chart data for income/expense visualization.
+
+    View types:
+    - overview: Shows income and expense lines
+    - expenses: Shows breakdown by expense categories
+    - income: Shows breakdown by income categories
+
+    When category is provided, shows subcategory breakdown.
+    """
+    # Build base query
+    query = db.query(Transaction)
+
+    if start_date:
+        query = query.filter(Transaction.date >= start_date)
+    if end_date:
+        query = query.filter(Transaction.date <= end_date)
+    if not include_internal:
+        query = query.filter(Transaction.is_internal_transfer == False)
+    if source_account:
+        query = query.filter(Transaction.source_account == source_account)
+
+    # Apply view type filters
+    if view_type == "expenses":
+        query = query.filter(Transaction.is_expense == True)
+        if category:
+            query = query.filter(Transaction.category == category)
+    elif view_type == "income":
+        query = query.filter(Transaction.is_expense == False)
+        if category:
+            query = query.filter(Transaction.category == category)
+
+    # Get all matching transactions
+    transactions = query.order_by(Transaction.date).all()
+
+    if not transactions:
+        return {"labels": [], "datasets": [], "view_type": view_type, "category": category}
+
+    # Determine date range for labels
+    if start_date and end_date:
+        range_start, range_end = start_date, end_date
+    elif transactions:
+        range_start = transactions[0].date
+        range_end = transactions[-1].date
+    else:
+        return {"labels": [], "datasets": [], "view_type": view_type, "category": category}
+
+    # Generate labels based on granularity
+    labels = []
+    label_keys = []
+
+    if granularity == "day":
+        current = range_start
+        while current <= range_end:
+            labels.append(current.strftime("%d %b"))
+            label_keys.append(current.isoformat())
+            current += timedelta(days=1)
+    elif granularity == "week":
+        # Start from Monday of the first week
+        current = range_start - timedelta(days=range_start.weekday())
+        while current <= range_end:
+            week_end = current + timedelta(days=6)
+            labels.append(f"{current.strftime('%d %b')} - {week_end.strftime('%d %b')}")
+            label_keys.append(current.isoformat())
+            current += timedelta(weeks=1)
+    elif granularity == "month":
+        current = date(range_start.year, range_start.month, 1)
+        while current <= range_end:
+            labels.append(current.strftime("%b %Y"))
+            label_keys.append(f"{current.year}-{current.month:02d}")
+            # Move to next month
+            if current.month == 12:
+                current = date(current.year + 1, 1, 1)
+            else:
+                current = date(current.year, current.month + 1, 1)
+
+    # Helper to get the label key for a transaction date
+    def get_label_key(txn_date):
+        if granularity == "day":
+            return txn_date.isoformat()
+        elif granularity == "week":
+            # Get Monday of the week
+            monday = txn_date - timedelta(days=txn_date.weekday())
+            return monday.isoformat()
+        elif granularity == "month":
+            return f"{txn_date.year}-{txn_date.month:02d}"
+
+    datasets = []
+
+    if view_type == "overview":
+        # Two lines: Income and Expenses (fixed colors)
+        income_data = defaultdict(float)
+        expense_data = defaultdict(float)
+
+        for txn in transactions:
+            key = get_label_key(txn.date)
+            if txn.is_expense:
+                expense_data[key] += float(txn.amount_gel)
+            else:
+                income_data[key] += float(txn.amount_gel)
+
+        datasets = [
+            {
+                "name": "Income",
+                "data": [round(income_data.get(k, 0), 2) for k in label_keys],
+                "color": OVERVIEW_COLORS["income"],
+                "key": "income"
+            },
+            {
+                "name": "Expenses",
+                "data": [round(expense_data.get(k, 0), 2) for k in label_keys],
+                "color": OVERVIEW_COLORS["expenses"],
+                "key": "expenses"
+            }
+        ]
+
+    elif view_type in ("expenses", "income"):
+        if category:
+            # Show subcategory breakdown (fixed colors)
+            subcategory_data = defaultdict(lambda: defaultdict(float))
+
+            for txn in transactions:
+                key = get_label_key(txn.date)
+                sub = txn.subcategory or "Uncategorized"
+                subcategory_data[sub][key] += float(txn.amount_gel)
+
+            for sub in subcategory_data.keys():
+                datasets.append({
+                    "name": sub,
+                    "data": [round(subcategory_data[sub].get(k, 0), 2) for k in label_keys],
+                    "color": get_category_color(sub),
+                    "key": sub
+                })
+        else:
+            # Show main category breakdown (fixed colors)
+            category_data = defaultdict(lambda: defaultdict(float))
+
+            for txn in transactions:
+                key = get_label_key(txn.date)
+                cat = txn.category or "Uncategorized"
+                category_data[cat][key] += float(txn.amount_gel)
+
+            for cat in category_data.keys():
+                datasets.append({
+                    "name": cat,
+                    "data": [round(category_data[cat].get(k, 0), 2) for k in label_keys],
+                    "color": get_category_color(cat),
+                    "key": cat
+                })
+
+    # Sort datasets by total value (descending) for better visibility
+    for ds in datasets:
+        ds["total"] = sum(ds["data"])
+    datasets.sort(key=lambda x: x["total"], reverse=True)
+
+    # Remove the total field from output
+    for ds in datasets:
+        del ds["total"]
+
+    return {
+        "labels": labels,
+        "datasets": datasets,
+        "view_type": view_type,
+        "category": category,
+        "granularity": granularity
+    }
 
 
 # NOTE: Static routes like /all and /delete-bulk MUST come before parameterized routes like /{transaction_id}

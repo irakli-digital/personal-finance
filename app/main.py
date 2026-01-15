@@ -43,6 +43,10 @@ async def dashboard(
     end_date: Optional[date] = None,
     include_internal: bool = True,
     source_account: Optional[str] = None,
+    view_type: Optional[str] = Query("overview", description="Chart view: overview, expenses, income"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    subcategory: Optional[str] = Query(None, description="Filter by subcategory"),
+    granularity: Optional[str] = Query("day", description="Chart granularity: day, week, month"),
     db: Session = Depends(get_db)
 ):
     """
@@ -63,6 +67,18 @@ async def dashboard(
 
     if source_account:
         query = query.filter(Transaction.source_account == source_account)
+
+    # Apply view type filters for table
+    if view_type == "expenses":
+        query = query.filter(Transaction.is_expense == True)
+    elif view_type == "income":
+        query = query.filter(Transaction.is_expense == False)
+
+    # Apply category/subcategory filters
+    if category:
+        query = query.filter(Transaction.category == category)
+    if subcategory:
+        query = query.filter(Transaction.subcategory == subcategory)
 
     # Get total count
     total = query.count()
@@ -130,7 +146,83 @@ async def dashboard(
             "total_income": total_income,
             "net": total_income - total_expenses,
             "categories": categories,
-            "uncategorized_count": uncategorized_count
+            "uncategorized_count": uncategorized_count,
+            "view_type": view_type,
+            "selected_category": category,
+            "selected_subcategory": subcategory,
+            "granularity": granularity
+        }
+    )
+
+
+@app.get("/api/table-html", response_class=HTMLResponse)
+async def get_table_html(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    include_internal: bool = True,
+    source_account: Optional[str] = None,
+    view_type: Optional[str] = Query("overview", description="Chart view: overview, expenses, income"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    subcategory: Optional[str] = Query(None, description="Filter by subcategory"),
+    db: Session = Depends(get_db)
+):
+    """
+    Return the transactions table HTML fragment for AJAX updates.
+    """
+    # Build query
+    query = db.query(Transaction)
+
+    # Apply filters
+    if start_date:
+        query = query.filter(Transaction.date >= start_date)
+    if end_date:
+        query = query.filter(Transaction.date <= end_date)
+    if not include_internal:
+        query = query.filter(Transaction.is_internal_transfer == False)
+    if source_account:
+        query = query.filter(Transaction.source_account == source_account)
+
+    # Apply view type filters
+    if view_type == "expenses":
+        query = query.filter(Transaction.is_expense == True)
+    elif view_type == "income":
+        query = query.filter(Transaction.is_expense == False)
+
+    # Apply category/subcategory filters
+    if category:
+        query = query.filter(Transaction.category == category)
+    if subcategory:
+        query = query.filter(Transaction.subcategory == subcategory)
+
+    # Get total count
+    total = query.count()
+
+    # Calculate pagination
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
+    offset = (page - 1) * limit
+
+    # Get paginated results
+    transactions_list = query.order_by(
+        desc(Transaction.date),
+        desc(Transaction.id)
+    ).offset(offset).limit(limit).all()
+
+    # Get categories for dropdowns
+    categories = get_all_categories()
+
+    return templates.TemplateResponse(
+        "partials/transactions_table.html",
+        {
+            "request": request,
+            "transactions": transactions_list,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "categories": categories
         }
     )
 

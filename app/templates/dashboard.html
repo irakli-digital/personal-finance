@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Finance Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -530,6 +531,488 @@
                 max-width: 150px;
             }
         }
+
+        /* Clickable stat cards */
+        .stat-card.clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .stat-card.clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .stat-card.clickable.active {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-card.clickable.active.expense-card {
+            border-color: #e53e3e;
+            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+        }
+
+        .stat-card.clickable.active.income-card {
+            border-color: #38a169;
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.3);
+        }
+
+        /* Chart section */
+        .chart-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .chart-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item {
+            color: #667eea;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .breadcrumb-item:hover {
+            background: #edf2f7;
+        }
+
+        .breadcrumb-item.current {
+            color: #333;
+            font-weight: 600;
+            cursor: default;
+        }
+
+        .breadcrumb-item.current:hover {
+            background: transparent;
+        }
+
+        .breadcrumb-separator {
+            color: #a0aec0;
+        }
+
+        .granularity-toggle {
+            display: flex;
+            background: #edf2f7;
+            border-radius: 20px;
+            padding: 3px;
+        }
+
+        .granularity-btn {
+            padding: 6px 14px;
+            border: none;
+            background: transparent;
+            color: #666;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border-radius: 17px;
+            transition: all 0.2s;
+        }
+
+        .granularity-btn:hover {
+            color: #333;
+        }
+
+        .granularity-btn.active {
+            background: white;
+            color: #667eea;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .legend-item:hover {
+            background: #f7fafc;
+        }
+
+        .legend-item.clickable {
+            cursor: pointer;
+        }
+
+        .legend-item.clickable:hover {
+            background: #edf2f7;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .legend-value {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .chart-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #a0aec0;
+            font-size: 1rem;
+        }
+
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .chart-filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .date-filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-filter-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .date-filter-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chart-filter-input {
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            background: white;
+            min-width: 130px;
+            color: #333;
+        }
+
+        .chart-filter-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .chart-filter-select {
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            background: white;
+            cursor: pointer;
+            min-width: 120px;
+            color: #333;
+        }
+
+        .chart-filter-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .filter-separator {
+            width: 1px;
+            height: 24px;
+            background: #e0e0e0;
+            margin: 0 8px;
+        }
+
+        /* iOS-style toggle switch */
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #555;
+        }
+
+        .toggle-switch input {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            background: #ccc;
+            border-radius: 22px;
+            transition: background 0.3s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: #667eea;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+        }
+
+        /* Circular refresh button */
+        .refresh-btn-circle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: #f0f0f0;
+            border: 1px solid #e0e0e0;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn-circle:hover {
+            background: #e0e0e0;
+            border-color: #ccc;
+        }
+
+        .refresh-btn-circle svg {
+            width: 16px;
+            height: 16px;
+            color: #555;
+        }
+
+        .refresh-btn-circle.loading svg {
+            animation: spin 1s linear infinite;
+        }
+
+        .refresh-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            color: #555;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #e0e0e0;
+            border-color: #ccc;
+        }
+
+        .refresh-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .refresh-btn.loading svg {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Action bar above table */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .action-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .action-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .upload-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .upload-btn:hover {
+            background: #5a6fd6;
+        }
+
+        .upload-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .action-btn.danger {
+            color: #e53e3e;
+        }
+
+        .action-btn.danger:hover {
+            background: #fed7d7;
+            border-color: #fc8181;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .selection-count {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .selection-count strong {
+            color: #333;
+        }
+
+        /* AI controls in action bar */
+        .ai-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-action-btn {
+            background: #667eea !important;
+            color: white !important;
+            border-color: #667eea !important;
+        }
+
+        .ai-action-btn:hover {
+            background: #5a6fd6 !important;
+        }
+
+        .ai-status-text {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .action-separator {
+            width: 1px;
+            height: 24px;
+            background: #ddd;
+            margin: 0 8px;
+        }
+
+        .progress-bar-mini {
+            width: 80px;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar-mini .progress-bar-fill {
+            height: 100%;
+            background: #667eea;
+            transition: width 0.3s ease;
+        }
+
+        .table-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        /* Hide file input */
+        .hidden-file-input {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -542,11 +1025,11 @@
         <div id="message"></div>
 
         <div class="stats-grid">
-            <div class="stat-card">
+            <div class="stat-card clickable expense-card {% if view_type == 'expenses' %}active{% endif %}" data-view="expenses">
                 <h3>Total Expenses</h3>
                 <div class="value expense">{{ "{:,.2f}".format(total_expenses) }} GEL</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card clickable income-card {% if view_type == 'income' %}active{% endif %}" data-view="income">
                 <h3>Total Income</h3>
                 <div class="value income">{{ "{:,.2f}".format(total_income) }} GEL</div>
             </div>
@@ -562,190 +1045,130 @@
             </div>
         </div>
 
-        <div class="controls">
-            <form method="GET" action="/" id="filterForm">
-                <div class="preset-label">Quick Filters</div>
-                <div class="preset-buttons">
-                    <button type="button" class="preset-btn" data-preset="today">Today</button>
-                    <button type="button" class="preset-btn" data-preset="last7">Last 7 Days</button>
-                    <button type="button" class="preset-btn" data-preset="last30">Last 30 Days</button>
-                    <button type="button" class="preset-btn" data-preset="thisMonth">This Month</button>
-                    <button type="button" class="preset-btn" data-preset="lastMonth">Last Month</button>
-                    <button type="button" class="preset-btn" data-preset="thisYear">This Year</button>
-                    <button type="button" class="preset-btn" data-preset="allTime">All Time</button>
+
+        <!-- Chart Section with Integrated Filters -->
+        <div class="chart-section">
+            <div class="chart-header">
+                <div class="chart-breadcrumb" id="chartBreadcrumb">
+                    <span class="breadcrumb-item {% if view_type == 'overview' %}current{% endif %}" data-view="overview">Overview</span>
+                    {% if view_type in ['expenses', 'income'] %}
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-item {% if not selected_category %}current{% endif %}" data-view="{{ view_type }}">
+                        {{ 'Expenses' if view_type == 'expenses' else 'Income' }}
+                    </span>
+                    {% endif %}
+                    {% if selected_category %}
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-item current" data-category="{{ selected_category }}">{{ selected_category }}</span>
+                    {% endif %}
                 </div>
-                <input type="hidden" id="preset" name="preset" value="{{ preset if preset else '' }}">
-                <div class="controls-row">
-                    <div class="control-group">
-                        <label for="start_date">From Date</label>
-                        <input type="date" id="start_date" name="start_date"
-                               value="{{ start_date if start_date else '' }}">
-                    </div>
-                    <div class="control-group">
-                        <label for="end_date">To Date</label>
-                        <input type="date" id="end_date" name="end_date"
-                               value="{{ end_date if end_date else '' }}">
-                    </div>
-                    <div class="control-group">
-                        <label for="source_account">Account</label>
-                        <select id="source_account" name="source_account">
+                <div class="chart-controls">
+                    <div class="chart-filters">
+                        <div class="date-filter-group">
+                            <div class="date-filter-wrapper">
+                                <span class="date-filter-label">From</span>
+                                <input type="date" id="startDateFilter" class="chart-filter-input"
+                                       value="{{ start_date if start_date else '' }}">
+                            </div>
+                            <div class="date-filter-wrapper">
+                                <span class="date-filter-label">To</span>
+                                <input type="date" id="endDateFilter" class="chart-filter-input"
+                                       value="{{ end_date if end_date else '' }}">
+                            </div>
+                        </div>
+                        <div class="filter-separator"></div>
+                        <select id="quickFilterSelect" class="chart-filter-select">
+                            <option value="">Quick Range</option>
+                            <option value="today">Today</option>
+                            <option value="last7">Last 7 Days</option>
+                            <option value="last30">Last 30 Days</option>
+                            <option value="thisMonth">This Month</option>
+                            <option value="lastMonth">Last Month</option>
+                            <option value="thisYear">This Year</option>
+                            <option value="allTime">All Time</option>
+                        </select>
+                        <select id="accountFilter" class="chart-filter-select">
                             <option value="">All Accounts</option>
                             {% for account in accounts %}
-                            <option value="{{ account }}"
-                                    {% if source_account == account %}selected{% endif %}>
+                            <option value="{{ account }}" {% if source_account == account %}selected{% endif %}>
                                 {{ account }}
                             </option>
                             {% endfor %}
                         </select>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="includeInternalFilter" {% if include_internal %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                            <span>Internal</span>
+                        </label>
                     </div>
-                    <div class="control-group">
-                        <label>&nbsp;</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="include_internal" name="include_internal"
-                                   {% if include_internal %}checked{% endif %}>
-                            <label for="include_internal">Show Internal Transfers</label>
-                        </div>
+                    <div class="filter-separator"></div>
+                    <div class="granularity-toggle">
+                        <button type="button" class="granularity-btn {% if granularity == 'day' %}active{% endif %}" data-granularity="day">Day</button>
+                        <button type="button" class="granularity-btn {% if granularity == 'week' %}active{% endif %}" data-granularity="week">Week</button>
+                        <button type="button" class="granularity-btn {% if granularity == 'month' %}active{% endif %}" data-granularity="month">Month</button>
                     </div>
-                    <div class="control-group">
-                        <label>&nbsp;</label>
-                        <button type="submit">Apply Filters</button>
-                    </div>
-                    <div class="control-group">
-                        <label>&nbsp;</label>
-                        <a href="/"><button type="button" class="secondary">Reset</button></a>
-                    </div>
-                </div>
-            </form>
-
-            <div class="upload-section">
-                <form class="upload-form" id="uploadForm" enctype="multipart/form-data">
-                    <input type="file" id="csvFile" name="file" accept=".csv" multiple required>
-                    <button type="submit" id="uploadBtn">Upload CSV(s)</button>
-                    <span id="uploadStatus" style="margin-left: 10px; color: #666;"></span>
-                </form>
-            </div>
-
-            <div class="ai-section">
-                <button type="button" class="ai-btn" id="aiCategorizeBtn" {% if uncategorized_count == 0 %}disabled{% endif %}>
-                    Auto-Categorize with AI
-                </button>
-                <button type="button" class="ai-btn" id="aiCancelBtn" style="display: none; background: #e53e3e;">
-                    Cancel
-                </button>
-                <div class="ai-status">
-                    <strong id="uncategorizedCount">{{ uncategorized_count }}</strong> uncategorized transactions
-                </div>
-                <div id="aiProgress" style="display: none;">
-                    <div class="progress-bar">
-                        <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
-                    </div>
-                    <span id="progressText">Processing...</span>
+                    <button type="button" class="refresh-btn-circle" id="refreshChartBtn" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
-
-            <div class="delete-section">
-                <button type="button" class="delete-btn" id="deleteSelectedBtn" disabled>
-                    Delete Selected
-                </button>
-                <button type="button" class="delete-btn" id="deleteAllBtn">
-                    Delete All
-                </button>
-                <div class="selection-info">
-                    <strong id="selectedCount">0</strong> selected
-                </div>
+            <div class="chart-container">
+                <canvas id="financeChart"></canvas>
             </div>
+            <div class="chart-legend" id="chartLegend"></div>
         </div>
 
-        <div class="table-container">
-            {% if transactions %}
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 40px;"><input type="checkbox" id="selectAll" class="row-checkbox"></th>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Amount (GEL)</th>
-                        <th>Category</th>
-                        <th>Subcategory</th>
-                        <th>Partner</th>
-                        <th>Flags</th>
-                        <th style="width: 40px;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for txn in transactions %}
-                    <tr data-id="{{ txn.id }}">
-                        <td><input type="checkbox" class="row-checkbox txn-checkbox" data-id="{{ txn.id }}"></td>
-                        <td>{{ txn.date.strftime('%d/%m/%Y') }}</td>
-                        <td class="truncate" title="{{ txn.description }}">
-                            {{ txn.description or '-' }}
-                        </td>
-                        <td class="amount {% if txn.is_expense %}expense{% else %}income{% endif %}">
-                            {% if txn.is_expense %}-{% else %}+{% endif %}{{ "{:,.2f}".format(txn.amount_gel) }}
-                        </td>
-                        <td class="category-cell">
-                            <select class="category-select" data-txn-id="{{ txn.id }}" data-type="category">
-                                <option value="" {% if not txn.category %}selected{% endif %}>-- Select --</option>
-                                {% for cat in categories.keys() %}
-                                <option value="{{ cat }}" {% if txn.category == cat %}selected{% endif %}>{{ cat }}</option>
-                                {% endfor %}
-                            </select>
-                        </td>
-                        <td class="category-cell">
-                            <select class="category-select subcategory-select" data-txn-id="{{ txn.id }}" data-type="subcategory" data-category="{{ txn.category or '' }}">
-                                <option value="" {% if not txn.subcategory %}selected{% endif %}>-- Select --</option>
-                                {% if txn.category and txn.category in categories %}
-                                    {% for sub in categories[txn.category] %}
-                                    <option value="{{ sub }}" {% if txn.subcategory == sub %}selected{% endif %}>{{ sub }}</option>
-                                    {% endfor %}
-                                {% endif %}
-                            </select>
-                        </td>
-                        <td class="truncate" title="{{ txn.partner_name }}">
-                            {{ txn.partner_name or '-' }}
-                        </td>
-                        <td>
-                            {% if txn.is_internal_transfer %}
-                                <span class="badge internal">Internal</span>
-                            {% endif %}
-                            {% if txn.amount_usd %}
-                                <span class="badge usd">USD</span>
-                            {% endif %}
-                            {% if txn.ai_categorized %}
-                                <span class="badge ai">AI</span>
-                            {% endif %}
-                        </td>
-                        <td><span class="delete-icon" data-id="{{ txn.id }}" title="Delete">&#128465;</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Hidden file input for upload -->
+        <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv" multiple>
 
-            <div class="pagination">
-                {% if page > 1 %}
-                    <a href="?page={{ page - 1 }}&limit={{ limit }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if include_internal %}&include_internal=true{% endif %}{% if source_account %}&source_account={{ source_account }}{% endif %}">
-                        Previous
-                    </a>
-                {% else %}
-                    <a class="disabled">Previous</a>
-                {% endif %}
-
-                <span>Page {{ page }} of {{ total_pages }}</span>
-
-                {% if page < total_pages %}
-                    <a href="?page={{ page + 1 }}&limit={{ limit }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if include_internal %}&include_internal=true{% endif %}{% if source_account %}&source_account={{ source_account }}{% endif %}">
-                        Next
-                    </a>
-                {% else %}
-                    <a class="disabled">Next</a>
-                {% endif %}
+        <!-- Table with Action Bar -->
+        <div class="table-wrapper">
+            <div class="action-bar">
+                <div class="action-bar-left">
+                    <button type="button" class="upload-btn" id="uploadTriggerBtn" title="Upload CSV files">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                        Upload
+                    </button>
+                    <span id="uploadStatus" style="color: #666; font-size: 0.85rem;"></span>
+                </div>
+                <div class="action-bar-right">
+                    <div class="ai-controls" {% if uncategorized_count == 0 %}style="display: none;"{% endif %}>
+                        <button type="button" class="action-btn ai-action-btn" id="aiCategorizeBtn" {% if uncategorized_count == 0 %}disabled{% endif %}>
+                            Auto-Categorize AI
+                        </button>
+                        <button type="button" class="action-btn danger" id="aiCancelBtn" style="display: none;">
+                            Cancel
+                        </button>
+                        <span class="ai-status-text">
+                            <strong id="uncategorizedCount">{{ uncategorized_count }}</strong> uncategorized
+                        </span>
+                        <div id="aiProgress" style="display: none;">
+                            <div class="progress-bar-mini">
+                                <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
+                            <span id="progressText">Processing...</span>
+                        </div>
+                    </div>
+                    <div class="action-separator"></div>
+                    <button type="button" class="action-btn danger" id="deleteSelectedBtn" disabled>
+                        Delete Selected
+                    </button>
+                    <button type="button" class="action-btn danger" id="deleteAllBtn">
+                        Delete All
+                    </button>
+                    <span class="selection-count">
+                        <strong id="selectedCount">0</strong> selected
+                    </span>
+                </div>
             </div>
-            {% else %}
-            <div class="empty-state">
-                <h2>No Transactions Found</h2>
-                <p>Upload a CSV file to get started, or adjust your filters.</p>
+            <div class="table-container" id="tableContainer">
+                {% include "partials/transactions_table.html" %}
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -762,15 +1185,6 @@
     </div>
 
     <script>
-        // Session storage keys
-        const SESSION_KEYS = {
-            PRESET: 'pf_preset',
-            START_DATE: 'pf_start_date',
-            END_DATE: 'pf_end_date',
-            ACCOUNT: 'pf_account',
-            INCLUDE_INTERNAL: 'pf_include_internal'
-        };
-
         // Date utility functions
         function formatDate(date) {
             return date.toISOString().split('T')[0];
@@ -784,197 +1198,63 @@
             switch(preset) {
                 case 'today':
                     return { start: formatDate(today), end: formatDate(today) };
-
                 case 'last7':
                     const last7 = new Date(today);
                     last7.setDate(today.getDate() - 6);
                     return { start: formatDate(last7), end: formatDate(today) };
-
                 case 'last30':
                     const last30 = new Date(today);
                     last30.setDate(today.getDate() - 29);
                     return { start: formatDate(last30), end: formatDate(today) };
-
                 case 'thisMonth':
                     const monthStart = new Date(year, month, 1);
                     return { start: formatDate(monthStart), end: formatDate(today) };
-
                 case 'lastMonth':
                     const lastMonthStart = new Date(year, month - 1, 1);
                     const lastMonthEnd = new Date(year, month, 0);
                     return { start: formatDate(lastMonthStart), end: formatDate(lastMonthEnd) };
-
                 case 'thisYear':
                     const yearStart = new Date(year, 0, 1);
                     return { start: formatDate(yearStart), end: formatDate(today) };
-
                 case 'allTime':
                     return { start: '', end: '' };
-
                 default:
                     return { start: '', end: '' };
             }
         }
 
-        // Save filters to session storage
-        function saveFiltersToSession() {
-            const preset = document.getElementById('preset').value;
-            const startDate = document.getElementById('start_date').value;
-            const endDate = document.getElementById('end_date').value;
-            const account = document.getElementById('source_account').value;
-            const includeInternal = document.getElementById('include_internal').checked;
-
-            sessionStorage.setItem(SESSION_KEYS.PRESET, preset);
-            sessionStorage.setItem(SESSION_KEYS.START_DATE, startDate);
-            sessionStorage.setItem(SESSION_KEYS.END_DATE, endDate);
-            sessionStorage.setItem(SESSION_KEYS.ACCOUNT, account);
-            sessionStorage.setItem(SESSION_KEYS.INCLUDE_INTERNAL, includeInternal);
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => { messageDiv.innerHTML = ''; }, 5000);
         }
 
-        // Load filters from session storage
-        function loadFiltersFromSession() {
-            return {
-                preset: sessionStorage.getItem(SESSION_KEYS.PRESET),
-                startDate: sessionStorage.getItem(SESSION_KEYS.START_DATE),
-                endDate: sessionStorage.getItem(SESSION_KEYS.END_DATE),
-                account: sessionStorage.getItem(SESSION_KEYS.ACCOUNT),
-                includeInternal: sessionStorage.getItem(SESSION_KEYS.INCLUDE_INTERNAL)
-            };
-        }
-
-        // Check if this is the first visit (no session data)
-        function isFirstVisit() {
-            return sessionStorage.getItem(SESSION_KEYS.PRESET) === null;
-        }
-
-        // Apply a preset
-        function applyPreset(preset) {
-            const dates = getPresetDates(preset);
-
-            document.getElementById('start_date').value = dates.start;
-            document.getElementById('end_date').value = dates.end;
-            document.getElementById('preset').value = preset;
-
-            highlightActivePreset(preset);
-            saveFiltersToSession();
-        }
-
-        // Highlight the active preset button
-        function highlightActivePreset(activePreset) {
-            document.querySelectorAll('.preset-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.preset === activePreset) {
-                    btn.classList.add('active');
-                }
-            });
-        }
-
-        // Detect which preset matches current dates
-        function detectPresetFromDates(startDate, endDate) {
-            const presets = ['today', 'last7', 'last30', 'thisMonth', 'lastMonth', 'thisYear', 'allTime'];
-
-            for (const preset of presets) {
-                const dates = getPresetDates(preset);
-                if (dates.start === startDate && dates.end === endDate) {
-                    return preset;
-                }
-            }
-            return 'custom';
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const hasUrlParams = urlParams.has('start_date') || urlParams.has('end_date') ||
-                                 urlParams.has('source_account') || urlParams.has('preset');
-
-            if (!hasUrlParams) {
-                // No URL params - check session or apply default
-                if (isFirstVisit()) {
-                    // First visit - apply "This Month" and redirect
-                    applyPreset('thisMonth');
-                    document.getElementById('filterForm').submit();
-                    return;
-                } else {
-                    // Return visit without params - restore from session
-                    const saved = loadFiltersFromSession();
-                    if (saved.preset && saved.preset !== 'custom') {
-                        applyPreset(saved.preset);
-                        document.getElementById('source_account').value = saved.account || '';
-                        document.getElementById('include_internal').checked = saved.includeInternal === 'true';
-                        document.getElementById('filterForm').submit();
-                        return;
-                    }
-                }
-            }
-
-            // URL has params - detect and highlight preset
-            const currentStart = document.getElementById('start_date').value;
-            const currentEnd = document.getElementById('end_date').value;
-            const detectedPreset = detectPresetFromDates(currentStart, currentEnd);
-
-            highlightActivePreset(detectedPreset);
-            document.getElementById('preset').value = detectedPreset;
-
-            // Save current state to session
-            saveFiltersToSession();
+        // Upload button click - trigger file input
+        document.getElementById('uploadTriggerBtn')?.addEventListener('click', function() {
+            document.getElementById('csvFileInput').click();
         });
 
-        // Preset button click handlers
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const preset = this.dataset.preset;
-                applyPreset(preset);
-                document.getElementById('filterForm').submit();
-            });
-        });
-
-        // Save to session when form is submitted
-        document.getElementById('filterForm').addEventListener('submit', function() {
-            // Clear preset if dates were manually changed
-            const currentStart = document.getElementById('start_date').value;
-            const currentEnd = document.getElementById('end_date').value;
-            const currentPreset = document.getElementById('preset').value;
-
-            if (currentPreset && currentPreset !== 'custom') {
-                const presetDates = getPresetDates(currentPreset);
-                if (presetDates.start !== currentStart || presetDates.end !== currentEnd) {
-                    document.getElementById('preset').value = 'custom';
-                }
-            }
-
-            saveFiltersToSession();
-        });
-
-        // Upload form handler - supports multiple files
-        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const fileInput = document.getElementById('csvFile');
-            const files = fileInput.files;
-            const uploadBtn = document.getElementById('uploadBtn');
+        // Handle file selection and upload
+        document.getElementById('csvFileInput')?.addEventListener('change', async function() {
+            const files = this.files;
+            const uploadBtn = document.getElementById('uploadTriggerBtn');
             const uploadStatus = document.getElementById('uploadStatus');
 
-            if (!files || files.length === 0) {
-                showMessage('Please select at least one file', 'error');
-                return;
-            }
+            if (!files || files.length === 0) return;
 
             // Disable button during upload
             uploadBtn.disabled = true;
-            const originalText = uploadBtn.textContent;
+            const originalHTML = uploadBtn.innerHTML;
 
-            // Track aggregate results
             let totalNew = 0;
             let totalDuplicates = 0;
             let totalFiles = files.length;
             let successfulFiles = 0;
             let errors = [];
 
-            // Upload files one by one
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                uploadBtn.textContent = `Uploading ${i + 1}/${totalFiles}...`;
+                uploadBtn.innerHTML = `Uploading ${i + 1}/${totalFiles}...`;
                 uploadStatus.textContent = file.name;
 
                 const formData = new FormData();
@@ -985,7 +1265,6 @@
                         method: 'POST',
                         body: formData
                     });
-
                     const data = await response.json();
 
                     if (response.ok) {
@@ -1000,39 +1279,24 @@
                 }
             }
 
-            // Reset button
             uploadBtn.disabled = false;
-            uploadBtn.textContent = originalText;
+            uploadBtn.innerHTML = originalHTML;
             uploadStatus.textContent = '';
+            this.value = ''; // Reset file input
 
-            // Show results
             if (successfulFiles > 0) {
-                let message = `Uploaded ${successfulFiles}/${totalFiles} file(s): ` +
-                    `${totalNew} new transactions, ${totalDuplicates} duplicates skipped.`;
-
+                let message = `Uploaded ${successfulFiles}/${totalFiles} file(s): ${totalNew} new, ${totalDuplicates} duplicates.`;
                 if (errors.length > 0) {
                     message += ` Errors: ${errors.join('; ')}`;
                     showMessage(message, 'error');
                 } else {
                     showMessage(message, 'success');
                 }
-
-                // Reload page after short delay
                 setTimeout(() => window.location.reload(), 2000);
             } else {
                 showMessage(`All uploads failed: ${errors.join('; ')}`, 'error');
             }
         });
-
-        function showMessage(text, type) {
-            const messageDiv = document.getElementById('message');
-            messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
-
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                messageDiv.innerHTML = '';
-            }, 5000);
-        }
 
         // Categories data from server
         const CATEGORIES = {{ categories | tojson | safe }};
@@ -1112,78 +1376,149 @@
             }
         }
 
-        // AI Categorization - with cancel support
-        let aiCancelled = false;
+        // AI Categorization - Background task with polling
+        let currentTaskId = null;
+        let pollInterval = null;
 
-        document.getElementById('aiCategorizeBtn')?.addEventListener('click', async function() {
-            const btn = this;
+        // Check for active task on page load
+        async function checkActiveTask() {
+            try {
+                const response = await fetch('/api/categorize/active');
+                const data = await response.json();
+
+                if (data.task_id && data.status !== 'none') {
+                    // There's an active task, start polling
+                    currentTaskId = data.task_id;
+                    showTaskProgress(data);
+                    startPolling();
+                }
+            } catch (error) {
+                console.error('Error checking active task:', error);
+            }
+        }
+
+        function showTaskProgress(data) {
+            const btn = document.getElementById('aiCategorizeBtn');
             const cancelBtn = document.getElementById('aiCancelBtn');
             const progressDiv = document.getElementById('aiProgress');
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
 
-            aiCancelled = false;
             btn.style.display = 'none';
             cancelBtn.style.display = 'inline-block';
-            progressDiv.style.display = 'block';
-            progressFill.style.width = '0%';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel';
+            progressDiv.style.display = 'flex';
+            progressDiv.style.alignItems = 'center';
+            progressDiv.style.gap = '8px';
 
-            let totalProcessed = 0;
-            let remaining = parseInt(document.getElementById('uncategorizedCount').textContent);
-            const total = remaining;
+            const percent = data.total > 0 ? (data.processed / data.total) * 100 : 0;
+            progressFill.style.width = percent + '%';
+            progressText.textContent = `${data.processed}/${data.total}`;
 
-            try {
-                // Process in batches so we can cancel between them
-                while (remaining > 0 && !aiCancelled) {
-                    progressText.textContent = `Processing... ${totalProcessed}/${total}`;
+            // Update uncategorized count
+            const remaining = data.total - data.categorized;
+            document.getElementById('uncategorizedCount').textContent = remaining;
+        }
 
-                    const response = await fetch('/api/categorize/batch?batch_size=50', {
-                        method: 'POST'
-                    });
+        function hideTaskProgress() {
+            const btn = document.getElementById('aiCategorizeBtn');
+            const cancelBtn = document.getElementById('aiCancelBtn');
+            const progressDiv = document.getElementById('aiProgress');
 
-                    if (aiCancelled) break;
+            btn.style.display = 'inline-block';
+            btn.disabled = false;
+            cancelBtn.style.display = 'none';
+            progressDiv.style.display = 'none';
+        }
 
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+
+            pollInterval = setInterval(async () => {
+                if (!currentTaskId) {
+                    stopPolling();
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/categorize/task/${currentTaskId}`);
                     const data = await response.json();
 
-                    if (!response.ok) {
-                        throw new Error(data.detail || 'Categorization failed');
+                    showTaskProgress(data);
+
+                    if (data.status === 'completed') {
+                        stopPolling();
+                        showMessage(`Done! Categorized ${data.categorized} transactions in ${data.elapsed_seconds}s.`, 'success');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else if (data.status === 'cancelled') {
+                        stopPolling();
+                        showMessage(`Cancelled. Categorized ${data.categorized} transactions before stopping.`, 'success');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else if (data.status === 'failed') {
+                        stopPolling();
+                        showMessage(`Failed: ${data.errors.join(', ')}`, 'error');
+                        hideTaskProgress();
                     }
-
-                    totalProcessed += data.categorized;
-                    remaining = data.remaining;
-
-                    // Update progress
-                    const percent = total > 0 ? ((total - remaining) / total) * 100 : 100;
-                    progressFill.style.width = percent + '%';
-                    document.getElementById('uncategorizedCount').textContent = remaining;
-
-                    if (data.categorized === 0) break;
+                } catch (error) {
+                    console.error('Polling error:', error);
                 }
+            }, 1000); // Poll every second
+        }
 
-                if (aiCancelled) {
-                    showMessage(`Cancelled. Categorized ${totalProcessed} transactions before stopping.`, 'success');
-                } else {
-                    showMessage(`Done! Categorized ${totalProcessed} transactions.`, 'success');
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            currentTaskId = null;
+        }
+
+        // Start categorization button
+        document.getElementById('aiCategorizeBtn')?.addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/categorize/start', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.task_id) {
+                    currentTaskId = data.task_id;
+                    showTaskProgress(data);
+                    startPolling();
+                    showMessage(`Started categorizing ${data.total} transactions...`, 'success');
+                } else if (data.status === 'completed') {
+                    showMessage('No transactions to categorize', 'success');
+                    btn.disabled = false;
                 }
-
-                // Reload page to show updated categories
-                setTimeout(() => window.location.reload(), 1500);
-
             } catch (error) {
-                showMessage('AI categorization failed: ' + error.message, 'error');
-            } finally {
-                btn.style.display = 'inline-block';
+                showMessage('Failed to start categorization: ' + error.message, 'error');
                 btn.disabled = false;
-                cancelBtn.style.display = 'none';
-                progressDiv.style.display = 'none';
             }
         });
 
-        document.getElementById('aiCancelBtn')?.addEventListener('click', function() {
-            aiCancelled = true;
+        // Cancel button
+        document.getElementById('aiCancelBtn')?.addEventListener('click', async function() {
+            if (!currentTaskId) return;
+
             this.textContent = 'Cancelling...';
             this.disabled = true;
+
+            try {
+                await fetch(`/api/categorize/task/${currentTaskId}/cancel`, {
+                    method: 'POST'
+                });
+                // Polling will handle the status update
+            } catch (error) {
+                showMessage('Failed to cancel: ' + error.message, 'error');
+            }
         });
+
+        // Check for active task on page load
+        checkActiveTask();
 
         // === DELETE FUNCTIONALITY ===
 
@@ -1331,6 +1666,614 @@
                     { type: 'single', ids: [id] }
                 );
             });
+        });
+
+        // ===== CHART FUNCTIONALITY (AJAX-based) =====
+
+        // Vertical line crosshair plugin
+        const verticalLinePlugin = {
+            id: 'verticalLine',
+            afterDraw: (chart) => {
+                if (chart.tooltip._active && chart.tooltip._active.length) {
+                    const ctx = chart.ctx;
+                    const activePoint = chart.tooltip._active[0];
+                    const x = activePoint.element.x;
+                    const topY = chart.scales.y.top;
+                    const bottomY = chart.scales.y.bottom;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, topY);
+                    ctx.lineTo(x, bottomY);
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        // Register the plugin
+        Chart.register(verticalLinePlugin);
+
+        // Chart state
+        let financeChart = null;
+        let chartState = {
+            viewType: '{{ view_type }}',
+            category: '{{ selected_category or "" }}',
+            granularity: '{{ granularity }}',
+            startDate: '{{ start_date or "" }}',
+            endDate: '{{ end_date or "" }}',
+            includeInternal: {{ 'true' if include_internal else 'false' }},
+            sourceAccount: '{{ source_account or "" }}',
+            page: {{ page }}
+        };
+
+        // Build URL params
+        function buildUrlParams(state) {
+            const params = new URLSearchParams();
+            if (state.startDate) params.set('start_date', state.startDate);
+            if (state.endDate) params.set('end_date', state.endDate);
+            if (state.includeInternal) params.set('include_internal', 'true');
+            if (state.sourceAccount) params.set('source_account', state.sourceAccount);
+            if (state.viewType && state.viewType !== 'overview') params.set('view_type', state.viewType);
+            if (state.category) params.set('category', state.category);
+            if (state.granularity && state.granularity !== 'day') params.set('granularity', state.granularity);
+            if (state.page && state.page > 1) params.set('page', state.page);
+            return params.toString();
+        }
+
+        // Update URL without page refresh
+        function updateUrl(pushState = true) {
+            const params = buildUrlParams(chartState);
+            const url = '/?' + params;
+            if (pushState) {
+                history.pushState(chartState, '', url);
+            } else {
+                history.replaceState(chartState, '', url);
+            }
+        }
+
+        // Fetch chart data from API
+        async function fetchChartData() {
+            const params = new URLSearchParams();
+            if (chartState.startDate) params.set('start_date', chartState.startDate);
+            if (chartState.endDate) params.set('end_date', chartState.endDate);
+            params.set('granularity', chartState.granularity);
+            params.set('view_type', chartState.viewType);
+            if (chartState.category) params.set('category', chartState.category);
+            params.set('include_internal', chartState.includeInternal);
+            if (chartState.sourceAccount) params.set('source_account', chartState.sourceAccount);
+
+            try {
+                const response = await fetch('/api/transactions/chart-data?' + params.toString());
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching chart data:', error);
+                return { labels: [], datasets: [] };
+            }
+        }
+
+        // Fetch table HTML from API
+        async function fetchTableHtml() {
+            const params = new URLSearchParams();
+            if (chartState.startDate) params.set('start_date', chartState.startDate);
+            if (chartState.endDate) params.set('end_date', chartState.endDate);
+            params.set('include_internal', chartState.includeInternal);
+            if (chartState.sourceAccount) params.set('source_account', chartState.sourceAccount);
+            if (chartState.viewType && chartState.viewType !== 'overview') params.set('view_type', chartState.viewType);
+            if (chartState.category) params.set('category', chartState.category);
+            if (chartState.page) params.set('page', chartState.page);
+
+            try {
+                const response = await fetch('/api/table-html?' + params.toString());
+                return await response.text();
+            } catch (error) {
+                console.error('Error fetching table:', error);
+                return '<div class="empty-state"><h2>Error loading transactions</h2></div>';
+            }
+        }
+
+        // Re-bind table event handlers after AJAX update
+        function rebindTableHandlers() {
+            // Reset selection state
+            selectedIds.clear();
+            updateSelectedCount();
+
+            // Select All checkbox
+            document.getElementById('selectAll')?.addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('.txn-checkbox').forEach(cb => {
+                    cb.checked = isChecked;
+                    const id = parseInt(cb.dataset.id);
+                    if (isChecked) {
+                        selectedIds.add(id);
+                    } else {
+                        selectedIds.delete(id);
+                    }
+                });
+                updateSelectedCount();
+            });
+
+            // Individual checkbox selection
+            document.querySelectorAll('.txn-checkbox').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    const id = parseInt(this.dataset.id);
+                    if (this.checked) {
+                        selectedIds.add(id);
+                    } else {
+                        selectedIds.delete(id);
+                        document.getElementById('selectAll').checked = false;
+                    }
+                    updateSelectedCount();
+                });
+            });
+
+            // Category select handlers
+            document.querySelectorAll('.category-select[data-type="category"]').forEach(select => {
+                select.addEventListener('change', async function() {
+                    const txnId = this.dataset.txnId;
+                    const category = this.value;
+                    const row = this.closest('tr');
+                    const subcategorySelect = row.querySelector('.subcategory-select');
+
+                    subcategorySelect.innerHTML = '<option value="">-- Select --</option>';
+                    if (category && CATEGORIES[category]) {
+                        CATEGORIES[category].forEach(sub => {
+                            const option = document.createElement('option');
+                            option.value = sub;
+                            option.textContent = sub;
+                            subcategorySelect.appendChild(option);
+                        });
+                        if (CATEGORIES[category].length > 0) {
+                            subcategorySelect.value = CATEGORIES[category][0];
+                        }
+                    }
+                    subcategorySelect.dataset.category = category;
+
+                    if (category) {
+                        await updateCategory(txnId, category, subcategorySelect.value || CATEGORIES[category][0]);
+                    }
+                });
+            });
+
+            // Subcategory select handlers
+            document.querySelectorAll('.subcategory-select').forEach(select => {
+                select.addEventListener('change', async function() {
+                    const txnId = this.dataset.txnId;
+                    const subcategory = this.value;
+                    const row = this.closest('tr');
+                    const categorySelect = row.querySelector('[data-type="category"]');
+                    const category = categorySelect.value;
+
+                    if (category && subcategory) {
+                        await updateCategory(txnId, category, subcategory);
+                    }
+                });
+            });
+
+            // Delete icons
+            document.querySelectorAll('.delete-icon').forEach(icon => {
+                icon.addEventListener('click', function() {
+                    const id = parseInt(this.dataset.id);
+                    showDeleteModal(
+                        'Delete Transaction',
+                        'Are you sure you want to delete this transaction? This action cannot be undone.',
+                        { type: 'single', ids: [id] }
+                    );
+                });
+            });
+
+            // Pagination links
+            document.querySelectorAll('.pagination-link').forEach(link => {
+                link.addEventListener('click', async function(e) {
+                    e.preventDefault();
+                    const page = parseInt(this.dataset.page);
+                    await updateState({ page: page }, true);
+                });
+            });
+        }
+
+        // Render chart
+        async function renderChart() {
+            const data = await fetchChartData();
+
+            // Restore canvas if it was replaced with empty message
+            const chartContainer = document.querySelector('.chart-container');
+            if (!chartContainer.querySelector('canvas')) {
+                chartContainer.innerHTML = '<canvas id="financeChart"></canvas>';
+            }
+
+            const ctx = document.getElementById('financeChart').getContext('2d');
+
+            // Destroy existing chart
+            if (financeChart) {
+                financeChart.destroy();
+            }
+
+            if (!data.labels || data.labels.length === 0) {
+                chartContainer.innerHTML = '<div class="chart-empty">No data available for the selected period</div>';
+                document.getElementById('chartLegend').innerHTML = '';
+                return;
+            }
+
+            // Prepare datasets for Chart.js
+            const datasets = data.datasets.map(ds => ({
+                label: ds.name,
+                data: ds.data,
+                borderColor: ds.color,
+                backgroundColor: ds.color + '20',
+                borderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: ds.color,
+                tension: 0.3,
+                fill: false,
+                key: ds.key
+            }));
+
+            // Create chart
+            financeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 })} GEL`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxRotation: 45, minRotation: 0 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f0f0f0' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString('en-US') + ' GEL';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Render custom legend
+            renderLegend(data.datasets);
+        }
+
+        // Render custom legend with click handlers
+        function renderLegend(datasets) {
+            const legendContainer = document.getElementById('chartLegend');
+            const isOverview = chartState.viewType === 'overview';
+            const canDrillDownCategory = !isOverview && !chartState.category;
+
+            legendContainer.innerHTML = datasets.map(ds => {
+                const total = ds.data.reduce((a, b) => a + b, 0);
+
+                // Determine if this legend item is clickable
+                let isClickable = false;
+                let clickHandler = '';
+
+                if (isOverview) {
+                    // In overview: Expenses and Income are clickable to drill into their views
+                    if (ds.key === 'expenses' || ds.key === 'income') {
+                        isClickable = true;
+                        clickHandler = `onclick="drillDownToView('${ds.key}')"`;
+                    }
+                } else if (canDrillDownCategory) {
+                    // In expenses/income view: categories are clickable to show subcategories
+                    isClickable = true;
+                    clickHandler = `onclick="drillDownToCategory('${ds.key}')"`;
+                }
+
+                return `
+                    <div class="legend-item ${isClickable ? 'clickable' : ''}"
+                         data-key="${ds.key}"
+                         ${clickHandler}>
+                        <span class="legend-color" style="background-color: ${ds.color}"></span>
+                        <span class="legend-name">${ds.name}</span>
+                        <span class="legend-value">${total.toLocaleString('en-US', { minimumFractionDigits: 2 })} GEL</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Drill down from overview to expenses or income view
+        async function drillDownToView(viewKey) {
+            const viewType = viewKey === 'expenses' ? 'expenses' : 'income';
+            await updateState({ viewType: viewType, category: '', page: 1 }, true);
+        }
+
+        // Update UI elements (cards, breadcrumb, granularity buttons)
+        function updateUIState() {
+            // Update card active states
+            document.querySelectorAll('.stat-card.clickable').forEach(card => {
+                card.classList.remove('active');
+                if (card.dataset.view === chartState.viewType) {
+                    card.classList.add('active');
+                }
+            });
+
+            // Update granularity buttons
+            document.querySelectorAll('.granularity-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.granularity === chartState.granularity) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update breadcrumb
+            updateBreadcrumb();
+        }
+
+        // Update breadcrumb based on current state
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('chartBreadcrumb');
+            let html = '';
+
+            // Overview is always clickable unless we're on it
+            const overviewClass = chartState.viewType === 'overview' && !chartState.category ? 'current' : '';
+            html += `<span class="breadcrumb-item ${overviewClass}" data-view="overview">Overview</span>`;
+
+            if (chartState.viewType !== 'overview') {
+                const viewLabel = chartState.viewType === 'expenses' ? 'Expenses' : 'Income';
+                const viewClass = !chartState.category ? 'current' : '';
+                html += `<span class="breadcrumb-separator">/</span>`;
+                html += `<span class="breadcrumb-item ${viewClass}" data-view="${chartState.viewType}">${viewLabel}</span>`;
+            }
+
+            if (chartState.category) {
+                html += `<span class="breadcrumb-separator">/</span>`;
+                html += `<span class="breadcrumb-item current" data-category="${chartState.category}">${chartState.category}</span>`;
+            }
+
+            breadcrumb.innerHTML = html;
+
+            // Re-bind breadcrumb click handlers
+            breadcrumb.querySelectorAll('.breadcrumb-item:not(.current)').forEach(item => {
+                item.addEventListener('click', async function() {
+                    const view = this.dataset.view;
+                    if (view === 'overview') {
+                        await updateState({ viewType: 'overview', category: '', page: 1 }, true);
+                    } else if (view) {
+                        await updateState({ viewType: view, category: '', page: 1 }, true);
+                    }
+                });
+            });
+        }
+
+        // Main state update function - updates chart, table, URL, and UI
+        async function updateState(changes, pushHistory = true) {
+            // Apply changes to state
+            Object.assign(chartState, changes);
+
+            // Update URL
+            updateUrl(pushHistory);
+
+            // Update UI elements
+            updateUIState();
+
+            // Fetch and update chart and table in parallel
+            const [_, tableHtml] = await Promise.all([
+                renderChart(),
+                fetchTableHtml()
+            ]);
+
+            // Update table
+            document.getElementById('tableContainer').innerHTML = tableHtml;
+            rebindTableHandlers();
+        }
+
+        // Update only chart (for granularity changes)
+        async function updateChartOnly(changes) {
+            Object.assign(chartState, changes);
+            updateUrl(false); // replaceState, not pushState
+            updateUIState();
+            await renderChart();
+        }
+
+        // Drill down to category
+        async function drillDownToCategory(category) {
+            await updateState({ category: category, page: 1 }, true);
+        }
+
+        // Stat card click handlers
+        document.querySelectorAll('.stat-card.clickable').forEach(card => {
+            card.addEventListener('click', async function() {
+                const view = this.dataset.view;
+                const currentView = chartState.viewType;
+
+                // Toggle: if clicking same card, go back to overview
+                if (currentView === view && !chartState.category) {
+                    await updateState({ viewType: 'overview', category: '', page: 1 }, true);
+                } else {
+                    await updateState({ viewType: view, category: '', page: 1 }, true);
+                }
+            });
+        });
+
+        // Granularity toggle handlers - only update chart, not table
+        document.querySelectorAll('.granularity-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const granularity = this.dataset.granularity;
+                if (granularity !== chartState.granularity) {
+                    await updateChartOnly({ granularity: granularity });
+                }
+            });
+        });
+
+        // Initial breadcrumb click handlers
+        document.querySelectorAll('.breadcrumb-item:not(.current)').forEach(item => {
+            item.addEventListener('click', async function() {
+                const view = this.dataset.view;
+                if (view === 'overview') {
+                    await updateState({ viewType: 'overview', category: '', page: 1 }, true);
+                } else if (view) {
+                    await updateState({ viewType: view, category: '', page: 1 }, true);
+                }
+            });
+        });
+
+        // Refresh button handler
+        document.getElementById('refreshChartBtn')?.addEventListener('click', async function() {
+            const btn = this;
+            btn.classList.add('loading');
+            btn.disabled = true;
+
+            try {
+                await renderChart();
+            } finally {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        });
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', async function(event) {
+            if (event.state) {
+                // Restore state from history
+                Object.assign(chartState, event.state);
+                syncFiltersFromState();
+                updateUIState();
+
+                // Update chart and table
+                const [_, tableHtml] = await Promise.all([
+                    renderChart(),
+                    fetchTableHtml()
+                ]);
+
+                document.getElementById('tableContainer').innerHTML = tableHtml;
+                rebindTableHandlers();
+            }
+        });
+
+        // ===== AUTO-APPLY FILTER HANDLERS =====
+
+        // Sync filter UI elements from chartState
+        function syncFiltersFromState() {
+            document.getElementById('startDateFilter').value = chartState.startDate || '';
+            document.getElementById('endDateFilter').value = chartState.endDate || '';
+            document.getElementById('accountFilter').value = chartState.sourceAccount || '';
+            document.getElementById('includeInternalFilter').checked = chartState.includeInternal;
+            document.getElementById('quickFilterSelect').value = '';
+        }
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Apply date filter changes
+        const applyDateFilter = debounce(async function() {
+            const startDate = document.getElementById('startDateFilter').value;
+            const endDate = document.getElementById('endDateFilter').value;
+            await updateState({
+                startDate: startDate,
+                endDate: endDate,
+                page: 1
+            }, true);
+        }, 500);
+
+        // Date input change handlers
+        document.getElementById('startDateFilter')?.addEventListener('change', applyDateFilter);
+        document.getElementById('endDateFilter')?.addEventListener('change', applyDateFilter);
+
+        // Quick filter dropdown handler
+        document.getElementById('quickFilterSelect')?.addEventListener('change', async function() {
+            const preset = this.value;
+            if (!preset) return;
+
+            const dates = getPresetDates(preset);
+
+            // Update date inputs visually
+            document.getElementById('startDateFilter').value = dates.start;
+            document.getElementById('endDateFilter').value = dates.end;
+
+            // Reset dropdown to show "Quick Filter" again
+            this.value = '';
+
+            // Apply filter
+            await updateState({
+                startDate: dates.start,
+                endDate: dates.end,
+                page: 1
+            }, true);
+        });
+
+        // Account dropdown handler
+        document.getElementById('accountFilter')?.addEventListener('change', async function() {
+            await updateState({
+                sourceAccount: this.value,
+                page: 1
+            }, true);
+        });
+
+        // Include internal checkbox handler
+        document.getElementById('includeInternalFilter')?.addEventListener('change', async function() {
+            await updateState({
+                includeInternal: this.checked,
+                page: 1
+            }, true);
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply default filter if no dates set
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasDateParams = urlParams.has('start_date') || urlParams.has('end_date');
+
+            if (!hasDateParams && !chartState.startDate && !chartState.endDate) {
+                // First visit - apply "This Month" default
+                const dates = getPresetDates('thisMonth');
+                chartState.startDate = dates.start;
+                chartState.endDate = dates.end;
+                syncFiltersFromState();
+                updateUrl(false);
+            }
+
+            // Store initial state in history
+            history.replaceState(chartState, '', window.location.href);
+
+            // Render chart if we have data
+            if (chartState.startDate || chartState.endDate || document.querySelector('.table-container table')) {
+                renderChart();
+            }
+
+            // Bind initial table handlers
+            rebindTableHandlers();
         });
     </script>
 </body>

@@ -1,12 +1,15 @@
 import logging
 import asyncio
 import time
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
+from threading import Thread
+from enum import Enum
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.models import Transaction
 from app.services.categories import (
     categorize_with_gemini,
@@ -22,6 +25,31 @@ router = APIRouter(prefix="/api/categorize", tags=["categorization"])
 BATCH_SIZE = 50
 # Max concurrent API calls (pay-as-you-go allows 2000 RPM)
 MAX_CONCURRENT = 100
+
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class TaskState:
+    """State for a background categorization task."""
+    def __init__(self, total: int):
+        self.status: TaskStatus = TaskStatus.PENDING
+        self.total: int = total
+        self.processed: int = 0
+        self.categorized: int = 0
+        self.errors: List[str] = []
+        self.cancel_requested: bool = False
+        self.started_at: float = None
+        self.completed_at: float = None
+
+
+# In-memory task storage (single task at a time for simplicity)
+_current_task: Dict[str, TaskState] = {}
 
 
 class CategorizeRequest(BaseModel):
@@ -45,6 +73,17 @@ class CategorizeProgress(BaseModel):
     total_batches: int
 
 
+class TaskResponse(BaseModel):
+    """Response for task operations."""
+    task_id: str
+    status: str
+    total: int
+    processed: int
+    categorized: int
+    errors: List[str] = []
+    elapsed_seconds: Optional[float] = None
+
+
 @router.get("/status")
 async def get_uncategorized_count(db: Session = Depends(get_db)):
     """
@@ -63,98 +102,232 @@ async def get_uncategorized_count(db: Session = Depends(get_db)):
     }
 
 
-async def process_batch(batch_num: int, batch: List, semaphore: asyncio.Semaphore) -> Tuple[int, List[dict], str]:
-    """Process a single batch with semaphore-controlled concurrency."""
-    async with semaphore:
-        try:
-            ai_transactions = prepare_transactions_for_ai(batch)
-            results = await categorize_with_gemini(ai_transactions)
-            return batch_num, results, None
-        except Exception as e:
-            error_msg = f"Batch {batch_num} failed: {str(e)}"
-            logger.error(error_msg)
-            return batch_num, [], error_msg
-
-
-@router.post("/", response_model=CategorizeResponse)
-async def categorize_transactions(
-    request: CategorizeRequest,
-    db: Session = Depends(get_db)
-):
+def run_categorization_sync(task_id: str, transaction_ids: List[int]):
     """
-    Categorize uncategorized transactions using AI.
-
-    Processes ALL batches in PARALLEL for maximum speed.
-    With pay-as-you-go, this handles hundreds of transactions in seconds.
+    Run categorization in a background thread.
+    This runs synchronously in its own thread with its own DB session.
     """
-    # Get transactions to categorize
-    query = db.query(Transaction)
+    task = _current_task.get(task_id)
+    if not task:
+        return
 
-    if not request.force_recategorize:
-        # Only uncategorized transactions
-        query = query.filter(Transaction.category.is_(None))
+    task.status = TaskStatus.RUNNING
+    task.started_at = time.time()
 
-    transactions = query.order_by(Transaction.date.desc()).all()
+    # Create a new DB session for this thread
+    db = SessionLocal()
+
+    try:
+        # Process in batches
+        total_batches = (len(transaction_ids) + BATCH_SIZE - 1) // BATCH_SIZE
+
+        for batch_num in range(total_batches):
+            # Check for cancellation
+            if task.cancel_requested:
+                task.status = TaskStatus.CANCELLED
+                logger.info(f"Task {task_id} cancelled after {task.processed} transactions")
+                break
+
+            start_idx = batch_num * BATCH_SIZE
+            end_idx = min(start_idx + BATCH_SIZE, len(transaction_ids))
+            batch_ids = transaction_ids[start_idx:end_idx]
+
+            # Get transactions for this batch
+            transactions = db.query(Transaction).filter(
+                Transaction.id.in_(batch_ids)
+            ).all()
+
+            if not transactions:
+                continue
+
+            try:
+                # Prepare and categorize
+                ai_transactions = prepare_transactions_for_ai(transactions)
+
+                # Run async categorization in a new event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    results = loop.run_until_complete(categorize_with_gemini(ai_transactions))
+                finally:
+                    loop.close()
+
+                # Update database
+                result_map = {r["id"]: r for r in results}
+
+                for txn in transactions:
+                    if txn.id in result_map:
+                        result = result_map[txn.id]
+                        txn.category = result["category"]
+                        txn.subcategory = result["subcategory"]
+                        txn.ai_categorized = True
+                        task.categorized += 1
+
+                db.commit()
+                task.processed += len(transactions)
+
+            except Exception as e:
+                error_msg = f"Batch {batch_num + 1} failed: {str(e)}"
+                logger.error(error_msg)
+                task.errors.append(error_msg)
+                task.processed += len(transactions)
+
+        # Mark complete if not cancelled
+        if task.status == TaskStatus.RUNNING:
+            task.status = TaskStatus.COMPLETED
+
+        task.completed_at = time.time()
+        logger.info(f"Task {task_id} completed: {task.categorized}/{task.total} categorized")
+
+    except Exception as e:
+        task.status = TaskStatus.FAILED
+        task.errors.append(str(e))
+        logger.error(f"Task {task_id} failed: {e}")
+    finally:
+        db.close()
+
+
+@router.post("/start")
+async def start_categorization(db: Session = Depends(get_db)):
+    """
+    Start background categorization task.
+    Returns immediately with a task_id for polling.
+    """
+    global _current_task
+
+    # Check if there's already a running task
+    for tid, task in _current_task.items():
+        if task.status == TaskStatus.RUNNING:
+            return {
+                "task_id": tid,
+                "status": task.status.value,
+                "message": "A categorization task is already running",
+                "total": task.total,
+                "processed": task.processed,
+                "categorized": task.categorized
+            }
+
+    # Get uncategorized transactions
+    transactions = db.query(Transaction).filter(
+        Transaction.category.is_(None)
+    ).order_by(Transaction.date.desc()).all()
 
     if not transactions:
-        return CategorizeResponse(
-            message="No transactions to categorize",
-            total_uncategorized=0,
-            categorized_count=0
-        )
+        return {
+            "task_id": None,
+            "status": "completed",
+            "message": "No transactions to categorize",
+            "total": 0,
+            "processed": 0,
+            "categorized": 0
+        }
 
-    total = len(transactions)
-    total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+    # Create new task
+    task_id = str(uuid.uuid4())[:8]
+    transaction_ids = [t.id for t in transactions]
 
-    logger.info(f"Starting parallel categorization: {total} transactions in {total_batches} batches")
-    start_time = time.time()
+    _current_task[task_id] = TaskState(total=len(transaction_ids))
 
-    # Create batches
-    batches = []
-    for i in range(0, total, BATCH_SIZE):
-        batch = transactions[i:i + BATCH_SIZE]
-        batch_num = (i // BATCH_SIZE) + 1
-        batches.append((batch_num, batch))
-
-    # Process all batches in parallel with semaphore to limit concurrency
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-    tasks = [process_batch(batch_num, batch, semaphore) for batch_num, batch in batches]
-    results = await asyncio.gather(*tasks)
-
-    # Collect all results and errors
-    all_results = {}
-    errors = []
-
-    for batch_num, batch_results, error in results:
-        if error:
-            errors.append(error)
-        else:
-            for r in batch_results:
-                all_results[r["id"]] = r
-
-    # Update database with all results at once
-    categorized_count = 0
-    for txn in transactions:
-        if txn.id in all_results:
-            result = all_results[txn.id]
-            txn.category = result["category"]
-            txn.subcategory = result["subcategory"]
-            txn.ai_categorized = True
-            categorized_count += 1
-
-    db.commit()
-
-    elapsed = time.time() - start_time
-    logger.info(f"Parallel categorization complete: {categorized_count} transactions in {elapsed:.2f}s")
-
-    return CategorizeResponse(
-        message=f"Categorization complete in {elapsed:.1f}s. Processed {categorized_count} of {total} transactions.",
-        total_uncategorized=total,
-        categorized_count=categorized_count,
-        errors=errors
+    # Start background thread
+    thread = Thread(
+        target=run_categorization_sync,
+        args=(task_id, transaction_ids),
+        daemon=True
     )
+    thread.start()
+
+    logger.info(f"Started categorization task {task_id} with {len(transaction_ids)} transactions")
+
+    return {
+        "task_id": task_id,
+        "status": "pending",
+        "message": f"Started categorizing {len(transaction_ids)} transactions",
+        "total": len(transaction_ids),
+        "processed": 0,
+        "categorized": 0
+    }
 
 
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Get status of a categorization task.
+    """
+    task = _current_task.get(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    elapsed = None
+    if task.started_at:
+        end_time = task.completed_at or time.time()
+        elapsed = round(end_time - task.started_at, 1)
+
+    return {
+        "task_id": task_id,
+        "status": task.status.value,
+        "total": task.total,
+        "processed": task.processed,
+        "categorized": task.categorized,
+        "errors": task.errors,
+        "elapsed_seconds": elapsed
+    }
+
+
+@router.post("/task/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """
+    Cancel a running categorization task.
+    """
+    task = _current_task.get(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != TaskStatus.RUNNING:
+        return {
+            "task_id": task_id,
+            "status": task.status.value,
+            "message": f"Task is not running (status: {task.status.value})"
+        }
+
+    task.cancel_requested = True
+
+    return {
+        "task_id": task_id,
+        "status": "cancelling",
+        "message": "Cancel requested, task will stop after current batch"
+    }
+
+
+@router.get("/active")
+async def get_active_task():
+    """
+    Get the currently active task, if any.
+    """
+    for tid, task in _current_task.items():
+        if task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]:
+            elapsed = None
+            if task.started_at:
+                elapsed = round(time.time() - task.started_at, 1)
+
+            return {
+                "task_id": tid,
+                "status": task.status.value,
+                "total": task.total,
+                "processed": task.processed,
+                "categorized": task.categorized,
+                "elapsed_seconds": elapsed
+            }
+
+    return {
+        "task_id": None,
+        "status": "none",
+        "message": "No active categorization task"
+    }
+
+
+# Keep the old batch endpoint for compatibility
 @router.post("/batch")
 async def categorize_batch(
     batch_size: int = BATCH_SIZE,

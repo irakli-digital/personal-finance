@@ -1,0 +1,89 @@
+{% if transactions %}
+<table>
+    <thead>
+        <tr>
+            <th style="width: 40px;"><input type="checkbox" id="selectAll" class="row-checkbox"></th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Amount (GEL)</th>
+            <th>Category</th>
+            <th>Subcategory</th>
+            <th>Partner</th>
+            <th>Flags</th>
+            <th style="width: 40px;"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for txn in transactions %}
+        <tr data-id="{{ txn.id }}">
+            <td><input type="checkbox" class="row-checkbox txn-checkbox" data-id="{{ txn.id }}"></td>
+            <td>{{ txn.date.strftime('%d/%m/%Y') }}</td>
+            <td class="truncate" title="{{ txn.description }}">
+                {{ txn.description or '-' }}
+            </td>
+            <td class="amount {% if txn.is_expense %}expense{% else %}income{% endif %}">
+                {% if txn.is_expense %}-{% else %}+{% endif %}{{ "{:,.2f}".format(txn.amount_gel) }}
+            </td>
+            <td class="category-cell">
+                <select class="category-select" data-txn-id="{{ txn.id }}" data-type="category">
+                    <option value="" {% if not txn.category %}selected{% endif %}>-- Select --</option>
+                    {% for cat in categories.keys() %}
+                    <option value="{{ cat }}" {% if txn.category == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="category-cell">
+                <select class="category-select subcategory-select" data-txn-id="{{ txn.id }}" data-type="subcategory" data-category="{{ txn.category or '' }}">
+                    <option value="" {% if not txn.subcategory %}selected{% endif %}>-- Select --</option>
+                    {% if txn.category and txn.category in categories %}
+                        {% for sub in categories[txn.category] %}
+                        <option value="{{ sub }}" {% if txn.subcategory == sub %}selected{% endif %}>{{ sub }}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </td>
+            <td class="truncate" title="{{ txn.partner_name }}">
+                {{ txn.partner_name or '-' }}
+            </td>
+            <td>
+                {% if txn.is_internal_transfer %}
+                    <span class="badge internal">Internal</span>
+                {% endif %}
+                {% if txn.amount_usd %}
+                    <span class="badge usd">USD</span>
+                {% endif %}
+                {% if txn.ai_categorized %}
+                    <span class="badge ai">AI</span>
+                {% endif %}
+            </td>
+            <td><span class="delete-icon" data-id="{{ txn.id }}" title="Delete">&#128465;</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="javascript:void(0)" class="pagination-link" data-page="{{ page - 1 }}">
+            Previous
+        </a>
+    {% else %}
+        <a class="disabled">Previous</a>
+    {% endif %}
+
+    <span>Page {{ page }} of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+        <a href="javascript:void(0)" class="pagination-link" data-page="{{ page + 1 }}">
+            Next
+        </a>
+    {% else %}
+        <a class="disabled">Next</a>
+    {% endif %}
+</div>
+{% else %}
+<div class="empty-state">
+    <h2>No Transactions Found</h2>
+    <p>Upload a CSV file to get started, or adjust your filters.</p>
+</div>
+{% endif %}

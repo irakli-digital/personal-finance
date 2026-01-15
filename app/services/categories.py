@@ -17,6 +17,86 @@ if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 
 
+# Fixed color mapping for categories (consistent across views)
+CATEGORY_COLORS: Dict[str, str] = {
+    # Main categories
+    "Food & Dining": "#dd6b20",      # orange
+    "Transportation": "#3182ce",     # blue
+    "Housing": "#805ad5",            # purple
+    "Shopping": "#d53f8c",           # pink
+    "Entertainment": "#00b5d8",      # cyan
+    "Health": "#38a169",             # green
+    "Financial": "#718096",          # gray
+    "Income": "#38a169",             # green (same as health, but used for income view)
+    "Transfers": "#a0aec0",          # light gray
+    "Other": "#4a5568",              # dark gray
+    "Uncategorized": "#a0aec0",      # light gray
+    # Subcategories - Food & Dining
+    "Restaurants": "#ed8936",
+    "Cafes & Bars": "#f6ad55",
+    "Fast Food & Delivery": "#fbd38d",
+    "Groceries": "#c05621",
+    "Bakeries": "#dd6b20",
+    # Subcategories - Transportation
+    "Fuel": "#2b6cb0",
+    "Parking": "#4299e1",
+    "Public Transport": "#63b3ed",
+    "Taxi & Rideshare": "#90cdf4",
+    "Car Maintenance": "#2c5282",
+    # Subcategories - Housing
+    "Rent": "#6b46c1",
+    "Utilities": "#9f7aea",
+    "Internet & TV": "#b794f4",
+    "Home Maintenance": "#553c9a",
+    "Furniture": "#805ad5",
+    # Subcategories - Shopping
+    "Clothing": "#b83280",
+    "Electronics": "#d53f8c",
+    "Health & Beauty": "#ed64a6",
+    "Gifts": "#f687b3",
+    "Other Shopping": "#97266d",
+    # Subcategories - Entertainment
+    "Subscriptions": "#0987a0",
+    "Movies & Events": "#00b5d8",
+    "Hobbies": "#76e4f7",
+    "Travel & Vacation": "#0bc5ea",
+    # Subcategories - Health
+    "Pharmacy": "#276749",
+    "Doctor & Medical": "#38a169",
+    "Gym & Fitness": "#68d391",
+    "Insurance": "#48bb78",
+    # Subcategories - Financial
+    "Bank Fees": "#4a5568",
+    "Interest Paid": "#718096",
+    "Investments": "#a0aec0",
+    "Currency Exchange": "#cbd5e0",
+    # Subcategories - Income
+    "Salary": "#2f855a",
+    "Business Income": "#38a169",
+    "Interest Earned": "#48bb78",
+    "Refunds": "#68d391",
+    "Other Income": "#9ae6b4",
+    # Subcategories - Transfers
+    "Internal Transfer": "#a0aec0",
+    "Transfer to Others": "#cbd5e0",
+    "Transfer from Others": "#e2e8f0",
+    # Subcategories - Other
+    "Cash Withdrawal": "#718096",
+    "Miscellaneous": "#a0aec0",
+}
+
+# Special colors for overview chart
+OVERVIEW_COLORS = {
+    "income": "#38a169",   # green
+    "expenses": "#e53e3e", # red
+}
+
+
+def get_category_color(name: str) -> str:
+    """Get the fixed color for a category or subcategory."""
+    return CATEGORY_COLORS.get(name, "#718096")  # default gray
+
+
 # Category definitions
 CATEGORIES: Dict[str, List[str]] = {
     "Food & Dining": [
