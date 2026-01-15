@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import google.generativeai as genai
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
 load_dotenv()
 
@@ -15,6 +16,15 @@ logger = logging.getLogger(__name__)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
+
+# Import database components (deferred to avoid circular imports)
+def _get_db_session():
+    from app.database import SessionLocal
+    return SessionLocal()
+
+def _get_models():
+    from app.models import Category, Subcategory
+    return Category, Subcategory
 
 
 # Fixed color mapping for categories (consistent across views)
@@ -97,8 +107,8 @@ def get_category_color(name: str) -> str:
     return CATEGORY_COLORS.get(name, "#718096")  # default gray
 
 
-# Category definitions
-CATEGORIES: Dict[str, List[str]] = {
+# Default category definitions (used for seeding and fallback)
+DEFAULT_CATEGORIES: Dict[str, List[str]] = {
     "Food & Dining": [
         "Restaurants",
         "Cafes & Bars",
@@ -164,29 +174,264 @@ CATEGORIES: Dict[str, List[str]] = {
     ]
 }
 
+# Categories that are income-related
+INCOME_CATEGORIES = {"Income"}
 
-def get_all_categories() -> Dict[str, List[str]]:
-    """Return the full category structure."""
-    return CATEGORIES
+# Backward compatibility alias
+CATEGORIES = DEFAULT_CATEGORIES
+
+# Cache for database categories
+_categories_cache: Optional[Dict[str, List[str]]] = None
+_cache_timestamp: float = 0
+CACHE_TTL = 300  # 5 minutes
 
 
-def get_category_list() -> List[str]:
+def seed_categories(db: Session = None) -> None:
+    """
+    Seed the database with default categories if empty.
+    Call this on app startup.
+    """
+    Category, Subcategory = _get_models()
+
+    close_db = False
+    if db is None:
+        db = _get_db_session()
+        close_db = True
+
+    try:
+        # Check if categories already exist
+        existing_count = db.query(Category).count()
+        if existing_count > 0:
+            logger.info(f"Categories already seeded ({existing_count} categories)")
+            return
+
+        logger.info("Seeding categories...")
+
+        for order, (cat_name, subcats) in enumerate(DEFAULT_CATEGORIES.items()):
+            is_income = cat_name in INCOME_CATEGORIES
+            color = CATEGORY_COLORS.get(cat_name, "#718096")
+
+            category = Category(
+                name=cat_name,
+                color=color,
+                is_income=is_income,
+                display_order=order
+            )
+            db.add(category)
+            db.flush()  # Get the category ID
+
+            for sub_order, sub_name in enumerate(subcats):
+                sub_color = CATEGORY_COLORS.get(sub_name)
+                subcategory = Subcategory(
+                    name=sub_name,
+                    category_id=category.id,
+                    color=sub_color,
+                    display_order=sub_order
+                )
+                db.add(subcategory)
+
+        db.commit()
+        logger.info(f"Seeded {len(DEFAULT_CATEGORIES)} categories with subcategories")
+
+        # Clear cache
+        global _categories_cache
+        _categories_cache = None
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error seeding categories: {e}")
+        raise
+    finally:
+        if close_db:
+            db.close()
+
+
+def get_all_categories(db: Session = None) -> Dict[str, List[str]]:
+    """
+    Return the full category structure from database.
+    Falls back to defaults if database is empty.
+    """
+    global _categories_cache, _cache_timestamp
+    import time
+
+    # Check cache
+    if _categories_cache and (time.time() - _cache_timestamp) < CACHE_TTL:
+        return _categories_cache
+
+    Category, Subcategory = _get_models()
+
+    close_db = False
+    if db is None:
+        db = _get_db_session()
+        close_db = True
+
+    try:
+        categories = db.query(Category).order_by(Category.display_order).all()
+
+        if not categories:
+            # Fallback to defaults if database is empty
+            return DEFAULT_CATEGORIES
+
+        result = {}
+        for cat in categories:
+            subcats = [s.name for s in sorted(cat.subcategories, key=lambda x: x.display_order)]
+            result[cat.name] = subcats
+
+        # Update cache
+        _categories_cache = result
+        _cache_timestamp = time.time()
+
+        return result
+
+    finally:
+        if close_db:
+            db.close()
+
+
+def get_all_categories_with_colors(db: Session = None) -> Dict[str, Dict]:
+    """
+    Return categories with their colors and subcategories.
+    """
+    Category, Subcategory = _get_models()
+
+    close_db = False
+    if db is None:
+        db = _get_db_session()
+        close_db = True
+
+    try:
+        categories = db.query(Category).order_by(Category.display_order).all()
+
+        if not categories:
+            # Fallback to defaults
+            return {
+                name: {
+                    "color": CATEGORY_COLORS.get(name, "#718096"),
+                    "is_income": name in INCOME_CATEGORIES,
+                    "subcategories": [
+                        {"name": s, "color": CATEGORY_COLORS.get(s)}
+                        for s in subs
+                    ]
+                }
+                for name, subs in DEFAULT_CATEGORIES.items()
+            }
+
+        result = {}
+        for cat in categories:
+            result[cat.name] = {
+                "id": cat.id,
+                "color": cat.color,
+                "is_income": cat.is_income,
+                "subcategories": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "color": s.color or cat.color
+                    }
+                    for s in sorted(cat.subcategories, key=lambda x: x.display_order)
+                ]
+            }
+
+        return result
+
+    finally:
+        if close_db:
+            db.close()
+
+
+def get_category_list(db: Session = None) -> List[str]:
     """Return flat list of categories."""
-    return list(CATEGORIES.keys())
+    categories = get_all_categories(db)
+    return list(categories.keys())
 
 
-def get_subcategories(category: str) -> List[str]:
+def get_subcategories(category: str, db: Session = None) -> List[str]:
     """Return subcategories for a given category."""
-    return CATEGORIES.get(category, [])
+    categories = get_all_categories(db)
+    return categories.get(category, [])
 
 
-def validate_category(category: str, subcategory: str) -> bool:
+def validate_category(category: str, subcategory: str, db: Session = None) -> bool:
     """Validate that category and subcategory are valid."""
-    if category not in CATEGORIES:
+    categories = get_all_categories(db)
+    if category not in categories:
         return False
-    if subcategory and subcategory not in CATEGORIES[category]:
+    if subcategory and subcategory not in categories[category]:
         return False
     return True
+
+
+def clear_categories_cache():
+    """Clear the categories cache (call after modifying categories)."""
+    global _categories_cache
+    _categories_cache = None
+
+
+def add_category(name: str, color: str = "#718096", is_income: bool = False, db: Session = None) -> int:
+    """Add a new category to the database. Returns the new category ID."""
+    Category, _ = _get_models()
+
+    close_db = False
+    if db is None:
+        db = _get_db_session()
+        close_db = True
+
+    try:
+        # Get max display order
+        max_order = db.query(Category).count()
+
+        category = Category(
+            name=name,
+            color=color,
+            is_income=is_income,
+            display_order=max_order
+        )
+        db.add(category)
+        db.commit()
+        db.refresh(category)
+
+        clear_categories_cache()
+        return category.id
+
+    finally:
+        if close_db:
+            db.close()
+
+
+def add_subcategory(category_name: str, subcategory_name: str, color: str = None, db: Session = None) -> int:
+    """Add a new subcategory to an existing category. Returns the new subcategory ID."""
+    Category, Subcategory = _get_models()
+
+    close_db = False
+    if db is None:
+        db = _get_db_session()
+        close_db = True
+
+    try:
+        # Find the category
+        category = db.query(Category).filter(Category.name == category_name).first()
+        if not category:
+            raise ValueError(f"Category '{category_name}' not found")
+
+        # Get max display order for this category
+        max_order = len(category.subcategories)
+
+        subcategory = Subcategory(
+            name=subcategory_name,
+            category_id=category.id,
+            color=color,
+            display_order=max_order
+        )
+        db.add(subcategory)
+        db.commit()
+        db.refresh(subcategory)
+
+        clear_categories_cache()
+        return subcategory.id
+
+    finally:
+        if close_db:
+            db.close()
 
 
 @dataclass
@@ -200,13 +445,17 @@ class TransactionForAI:
     amount: float
 
 
-def build_categorization_prompt(transactions: List[TransactionForAI]) -> str:
+def build_categorization_prompt(transactions: List[TransactionForAI], categories: Dict[str, List[str]] = None) -> str:
     """Build the prompt for Gemini to categorize transactions."""
+
+    # Use provided categories or get from database
+    if categories is None:
+        categories = get_all_categories()
 
     # Build category reference
     category_ref = "\n".join([
         f"- {cat}: {', '.join(subs)}"
-        for cat, subs in CATEGORIES.items()
+        for cat, subs in categories.items()
     ])
 
     # Build transaction list
@@ -258,7 +507,10 @@ async def categorize_with_gemini(transactions: List[TransactionForAI]) -> List[D
     if not transactions:
         return []
 
-    prompt = build_categorization_prompt(transactions)
+    # Get categories from database
+    categories = get_all_categories()
+
+    prompt = build_categorization_prompt(transactions, categories)
 
     try:
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -290,11 +542,11 @@ async def categorize_with_gemini(transactions: List[TransactionForAI]) -> List[D
                 subcategory = result.get("subcategory", "Uncategorized")
 
                 # Validate category exists
-                if category not in CATEGORIES:
+                if category not in categories:
                     category = "Other"
                     subcategory = "Uncategorized"
-                elif subcategory not in CATEGORIES.get(category, []):
-                    subcategory = CATEGORIES[category][0] if CATEGORIES[category] else "Uncategorized"
+                elif subcategory not in categories.get(category, []):
+                    subcategory = categories[category][0] if categories[category] else "Uncategorized"
 
                 validated_results.append({
                     "id": result["id"],

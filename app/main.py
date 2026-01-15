@@ -10,12 +10,18 @@ from decimal import Decimal
 import os
 
 from app.database import engine, get_db, Base
-from app.models import Transaction
+from app.models import Transaction, Category, Subcategory
 from app.routers import upload, transactions, categorize
-from app.services.categories import get_all_categories
+from app.services.categories import get_all_categories, seed_categories
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Seed categories if database is empty
+try:
+    seed_categories()
+except Exception as e:
+    print(f"Warning: Could not seed categories: {e}")
 
 # Initialize FastAPI app
 app = FastAPI(

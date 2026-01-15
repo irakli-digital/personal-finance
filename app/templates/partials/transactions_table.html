@@ -9,6 +9,7 @@
             <th>Category</th>
             <th>Subcategory</th>
             <th>Partner</th>
+            <th>Account</th>
             <th>Flags</th>
             <th style="width: 40px;"></th>
         </tr>
@@ -44,6 +45,9 @@
             </td>
             <td class="truncate" title="{{ txn.partner_name }}">
                 {{ txn.partner_name or '-' }}
+            </td>
+            <td class="truncate" title="{{ txn.source_account }}">
+                {{ txn.source_account or '-' }}
             </td>
             <td>
                 {% if txn.is_internal_transfer %}

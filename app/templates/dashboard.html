@@ -207,11 +207,13 @@
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         table {
             width: 100%;
+            min-width: 1000px;
             border-collapse: collapse;
         }
 
@@ -697,6 +699,149 @@
             font-size: 1rem;
         }
 
+        /* Pivot Table Styles */
+        .pivot-table-container {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .pivot-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .pivot-table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .pivot-table th,
+        .pivot-table td {
+            padding: 10px 12px;
+            text-align: right;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+        }
+
+        .pivot-table th:first-child,
+        .pivot-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 1;
+            min-width: 140px;
+        }
+
+        .pivot-table thead th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            transition: background 0.2s;
+        }
+
+        .pivot-table thead th:first-child {
+            z-index: 3;
+        }
+
+        .pivot-table thead th:hover {
+            background: #edf2f7;
+        }
+
+        .pivot-table thead th.sorted {
+            background: #e2e8f0;
+            color: #667eea;
+        }
+
+        .pivot-table thead th .sort-arrow {
+            margin-left: 4px;
+            font-size: 0.7rem;
+            opacity: 0.4;
+        }
+
+        .pivot-table thead th.sorted .sort-arrow {
+            opacity: 1;
+        }
+
+        .pivot-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .pivot-table tbody td {
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: #333;
+        }
+
+        .pivot-table tbody td:first-child {
+            font-family: inherit;
+            font-weight: 500;
+        }
+
+        .pivot-table tbody td.highlight {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .pivot-table tfoot td {
+            font-weight: 600;
+            background: #f8f9fa;
+            border-top: 2px solid #ddd;
+        }
+
+        .pivot-table .category-color {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .pivot-table-empty {
+            text-align: center;
+            padding: 40px;
+            color: #a0aec0;
+        }
+
+        .pivot-cell-clickable {
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .pivot-cell-clickable:hover {
+            box-shadow: inset 0 0 0 2px #667eea;
+            z-index: 1;
+        }
+
+        .pivot-cell-clickable:active {
+            transform: scale(0.98);
+        }
+
+        .pivot-cell-active {
+            box-shadow: inset 0 0 0 3px #667eea !important;
+            font-weight: 700 !important;
+            position: relative;
+            z-index: 2;
+        }
+
+        .pivot-cell-dimmed {
+            opacity: 0.3;
+        }
+
+        .pivot-row-dimmed td:first-child {
+            opacity: 0.4;
+        }
+
         .chart-controls {
             display: flex;
             align-items: center;
@@ -1119,6 +1264,16 @@
                 <canvas id="financeChart"></canvas>
             </div>
             <div class="chart-legend" id="chartLegend"></div>
+
+            <!-- Pivot Table -->
+            <div class="pivot-table-container" id="pivotTableContainer">
+                <div class="pivot-table-wrapper">
+                    <table class="pivot-table" id="pivotTable">
+                        <thead id="pivotTableHead"></thead>
+                        <tbody id="pivotTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Hidden file input for upload -->
@@ -1895,6 +2050,7 @@
             if (!data.labels || data.labels.length === 0) {
                 chartContainer.innerHTML = '<div class="chart-empty">No data available for the selected period</div>';
                 document.getElementById('chartLegend').innerHTML = '';
+                document.getElementById('pivotTableContainer').innerHTML = '<div class="pivot-table-empty">No data available for the selected period</div>';
                 return;
             }
 
@@ -1964,6 +2120,9 @@
 
             // Render custom legend
             renderLegend(data.datasets);
+
+            // Render pivot table
+            renderPivotTable(data);
         }
 
         // Render custom legend with click handlers
@@ -2001,6 +2160,472 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        // ===== PIVOT TABLE FUNCTIONALITY =====
+
+        let pivotData = null;
+        let pivotSortState = {
+            column: null,      // 'category' or index of date column
+            direction: 'desc'  // 'asc' or 'desc'
+        };
+        let pivotDateRanges = []; // Store date ranges for each column
+        let activePivotCell = null; // Track active cell {rowKey, colIndex}
+
+        // Calculate heatmap color based on value position in column
+        // High value = RED, Low value = GREEN
+        function getHeatmapColor(value, min, max) {
+            if (max === min || value === 0) return 'transparent';
+
+            // Normalize value to 0-1 range (high value = high ratio)
+            const ratio = (value - min) / (max - min);
+
+            // Red (high) -> Yellow (mid) -> Green (low)
+            let r, g, b;
+
+            if (ratio > 0.5) {
+                // Yellow to Red (ratio 0.5-1)
+                const t = (ratio - 0.5) * 2;
+                r = 255;
+                g = Math.round(255 * (1 - t));
+                b = 0;
+            } else {
+                // Green to Yellow (ratio 0-0.5)
+                const t = ratio * 2;
+                r = Math.round(255 * t);
+                g = 255;
+                b = 0;
+            }
+
+            return `rgba(${r}, ${g}, ${b}, 0.4)`;
+        }
+
+        // Check if a row is an income-related row (should skip heatmap)
+        function isIncomeRow(rowKey, viewType) {
+            // In overview: 'income' key is the income row
+            if (viewType === 'overview' && rowKey === 'income') return true;
+            // In income view: all rows are income categories
+            if (viewType === 'income') return true;
+            return false;
+        }
+
+        // Parse date range from label based on granularity
+        function getDateRangeForColumn(label, colIndex, labels, granularity) {
+            const currentYear = new Date().getFullYear();
+
+            if (granularity === 'day') {
+                // Label format: "Jan 15" or similar
+                // Parse and return single day range
+                const parsed = parseDayLabel(label, currentYear);
+                return { start: parsed, end: parsed };
+            } else if (granularity === 'week') {
+                // Label format: "Jan 6-12" or "Dec 30-Jan 5"
+                return parseWeekLabel(label, currentYear);
+            } else if (granularity === 'month') {
+                // Label format: "Jan 2026" or "Jan"
+                return parseMonthLabel(label);
+            }
+            return null;
+        }
+
+        function parseDayLabel(label, year) {
+            // Format: "Jan 15"
+            const months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            const parts = label.split(' ');
+            if (parts.length >= 2) {
+                const month = months[parts[0]];
+                const day = parseInt(parts[1]);
+                if (month !== undefined && !isNaN(day)) {
+                    const date = new Date(year, month, day);
+                    // Handle year rollover
+                    if (date > new Date()) {
+                        date.setFullYear(year - 1);
+                    }
+                    return formatDate(date);
+                }
+            }
+            return null;
+        }
+
+        function parseWeekLabel(label, year) {
+            // Format: "Jan 6-12" or "Dec 30-Jan 5"
+            const months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+
+            // Try "Dec 30-Jan 5" format first
+            const crossMonthMatch = label.match(/(\w+)\s+(\d+)-(\w+)\s+(\d+)/);
+            if (crossMonthMatch) {
+                const startMonth = months[crossMonthMatch[1]];
+                const startDay = parseInt(crossMonthMatch[2]);
+                const endMonth = months[crossMonthMatch[3]];
+                const endDay = parseInt(crossMonthMatch[4]);
+
+                let startYear = year;
+                let endYear = year;
+                if (startMonth === 11 && endMonth === 0) {
+                    endYear = year + 1;
+                }
+
+                return {
+                    start: formatDate(new Date(startYear, startMonth, startDay)),
+                    end: formatDate(new Date(endYear, endMonth, endDay))
+                };
+            }
+
+            // Try "Jan 6-12" format
+            const sameMonthMatch = label.match(/(\w+)\s+(\d+)-(\d+)/);
+            if (sameMonthMatch) {
+                const month = months[sameMonthMatch[1]];
+                const startDay = parseInt(sameMonthMatch[2]);
+                const endDay = parseInt(sameMonthMatch[3]);
+
+                return {
+                    start: formatDate(new Date(year, month, startDay)),
+                    end: formatDate(new Date(year, month, endDay))
+                };
+            }
+
+            return null;
+        }
+
+        function parseMonthLabel(label) {
+            // Format: "Jan 2026" or "Jan '26"
+            const months = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+
+            const match = label.match(/(\w+)\s*'?(\d+)/);
+            if (match) {
+                const month = months[match[1]];
+                let year = parseInt(match[2]);
+                if (year < 100) year += 2000; // Handle '26 -> 2026
+
+                const startDate = new Date(year, month, 1);
+                const endDate = new Date(year, month + 1, 0); // Last day of month
+
+                return {
+                    start: formatDate(startDate),
+                    end: formatDate(endDate)
+                };
+            }
+            return null;
+        }
+
+        // Render pivot table from chart data
+        function renderPivotTable(data) {
+            const container = document.getElementById('pivotTableContainer');
+            const thead = document.getElementById('pivotTableHead');
+            const tbody = document.getElementById('pivotTableBody');
+
+            // Store data for sorting
+            pivotData = data;
+
+            // Check if we have data
+            if (!data.labels || data.labels.length === 0 || !data.datasets || data.datasets.length === 0) {
+                container.innerHTML = '<div class="pivot-table-empty">No data available for the selected period</div>';
+                return;
+            }
+
+            // Restore table structure if it was replaced
+            if (!document.getElementById('pivotTable')) {
+                container.innerHTML = `
+                    <div class="pivot-table-wrapper">
+                        <table class="pivot-table" id="pivotTable">
+                            <thead id="pivotTableHead"></thead>
+                            <tbody id="pivotTableBody"></tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // Build header row
+            const headerRow = document.createElement('tr');
+
+            // Category column header
+            const categoryTh = document.createElement('th');
+            categoryTh.innerHTML = 'Category <span class="sort-arrow">▼</span>';
+            categoryTh.dataset.sortCol = 'category';
+            if (pivotSortState.column === 'category') {
+                categoryTh.classList.add('sorted');
+                categoryTh.querySelector('.sort-arrow').textContent = pivotSortState.direction === 'asc' ? '▲' : '▼';
+            }
+            categoryTh.addEventListener('click', () => handlePivotSort('category'));
+            headerRow.appendChild(categoryTh);
+
+            // Date column headers
+            data.labels.forEach((label, idx) => {
+                const th = document.createElement('th');
+                th.innerHTML = `${label} <span class="sort-arrow">▼</span>`;
+                th.dataset.sortCol = idx;
+                if (pivotSortState.column === idx) {
+                    th.classList.add('sorted');
+                    th.querySelector('.sort-arrow').textContent = pivotSortState.direction === 'asc' ? '▲' : '▼';
+                }
+                th.addEventListener('click', () => handlePivotSort(idx));
+                headerRow.appendChild(th);
+            });
+
+            // Total column header
+            const totalTh = document.createElement('th');
+            totalTh.innerHTML = 'Total <span class="sort-arrow">▼</span>';
+            totalTh.dataset.sortCol = 'total';
+            if (pivotSortState.column === 'total') {
+                totalTh.classList.add('sorted');
+                totalTh.querySelector('.sort-arrow').textContent = pivotSortState.direction === 'asc' ? '▲' : '▼';
+            }
+            totalTh.addEventListener('click', () => handlePivotSort('total'));
+            headerRow.appendChild(totalTh);
+
+            document.getElementById('pivotTableHead').innerHTML = '';
+            document.getElementById('pivotTableHead').appendChild(headerRow);
+
+            // Prepare row data for sorting
+            let rows = data.datasets.map(ds => ({
+                name: ds.name,
+                key: ds.key,
+                color: ds.color,
+                data: ds.data,
+                total: ds.data.reduce((a, b) => a + b, 0)
+            }));
+
+            // Apply sorting
+            if (pivotSortState.column !== null) {
+                rows = sortPivotRows(rows, pivotSortState.column, pivotSortState.direction);
+            }
+
+            // Calculate column min/max for heatmap (vertical comparison)
+            // EXCLUDE income rows from the calculation
+            const columnStats = data.labels.map((_, colIdx) => {
+                const values = rows
+                    .filter(r => !isIncomeRow(r.key, chartState.viewType))
+                    .map(r => r.data[colIdx])
+                    .filter(v => v > 0);
+                return {
+                    min: values.length ? Math.min(...values) : 0,
+                    max: values.length ? Math.max(...values) : 0
+                };
+            });
+
+            // Calculate date ranges for each column
+            pivotDateRanges = data.labels.map((label, idx) =>
+                getDateRangeForColumn(label, idx, data.labels, chartState.granularity)
+            );
+
+            // Build body rows
+            const tbodyEl = document.getElementById('pivotTableBody');
+            tbodyEl.innerHTML = '';
+
+            rows.forEach(row => {
+                const tr = document.createElement('tr');
+                const isIncome = isIncomeRow(row.key, chartState.viewType);
+
+                // Check if this row is dimmed (another cell is active)
+                const isRowDimmed = activePivotCell && activePivotCell.rowKey !== row.key;
+
+                if (isRowDimmed) {
+                    tr.classList.add('pivot-row-dimmed');
+                }
+
+                // Category cell with color indicator
+                const categoryTd = document.createElement('td');
+                categoryTd.innerHTML = `<span class="category-color" style="background-color: ${row.color}"></span>${row.name}`;
+                tr.appendChild(categoryTd);
+
+                // Data cells with heatmap coloring and click handler
+                row.data.forEach((value, idx) => {
+                    const td = document.createElement('td');
+                    td.textContent = value.toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+                    // Apply heatmap color ONLY for non-income rows
+                    if (!isIncome) {
+                        const { min, max } = columnStats[idx];
+                        const heatmapColor = getHeatmapColor(value, min, max);
+                        td.style.backgroundColor = heatmapColor;
+                    }
+
+                    if (pivotSortState.column === idx) {
+                        td.classList.add('highlight');
+                    }
+
+                    // Check if this is the active cell
+                    const isActiveCell = activePivotCell &&
+                        activePivotCell.rowKey === row.key &&
+                        activePivotCell.colIndex === idx;
+
+                    if (isActiveCell) {
+                        td.classList.add('pivot-cell-active');
+                    } else if (activePivotCell) {
+                        td.classList.add('pivot-cell-dimmed');
+                    }
+
+                    // Make cell clickable if it has a value
+                    if (value > 0) {
+                        td.classList.add('pivot-cell-clickable');
+                        td.title = `Click to filter by ${row.name} for ${data.labels[idx]}`;
+                        td.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            handlePivotCellClick(row.key, row.name, idx, data.labels[idx]);
+                        });
+                    }
+
+                    tr.appendChild(td);
+                });
+
+                // Total cell
+                const totalTd = document.createElement('td');
+                totalTd.textContent = row.total.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                totalTd.style.fontWeight = '600';
+                if (pivotSortState.column === 'total') {
+                    totalTd.classList.add('highlight');
+                }
+                if (activePivotCell) {
+                    totalTd.classList.add('pivot-cell-dimmed');
+                }
+                tr.appendChild(totalTd);
+
+                tbodyEl.appendChild(tr);
+            });
+
+            // Add footer with column totals
+            const tfoot = document.createElement('tfoot');
+            const footerRow = document.createElement('tr');
+
+            const footerLabel = document.createElement('td');
+            footerLabel.textContent = 'Total';
+            footerRow.appendChild(footerLabel);
+
+            // Sum each column
+            data.labels.forEach((_, idx) => {
+                const colTotal = rows.reduce((sum, row) => sum + row.data[idx], 0);
+                const td = document.createElement('td');
+                td.textContent = colTotal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                footerRow.appendChild(td);
+            });
+
+            // Grand total
+            const grandTotal = rows.reduce((sum, row) => sum + row.total, 0);
+            const grandTotalTd = document.createElement('td');
+            grandTotalTd.textContent = grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+            footerRow.appendChild(grandTotalTd);
+
+            tfoot.appendChild(footerRow);
+
+            // Remove existing tfoot if any
+            const existingTfoot = document.querySelector('.pivot-table tfoot');
+            if (existingTfoot) existingTfoot.remove();
+
+            document.getElementById('pivotTable').appendChild(tfoot);
+        }
+
+        // Sort pivot table rows
+        function sortPivotRows(rows, column, direction) {
+            const sorted = [...rows];
+
+            sorted.sort((a, b) => {
+                let valA, valB;
+
+                if (column === 'category') {
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                    return direction === 'asc'
+                        ? valA.localeCompare(valB)
+                        : valB.localeCompare(valA);
+                } else if (column === 'total') {
+                    valA = a.total;
+                    valB = b.total;
+                } else {
+                    // Numeric column index
+                    valA = a.data[column] || 0;
+                    valB = b.data[column] || 0;
+                }
+
+                if (direction === 'asc') {
+                    return valA - valB;
+                } else {
+                    return valB - valA;
+                }
+            });
+
+            return sorted;
+        }
+
+        // Handle pivot table sort click
+        function handlePivotSort(column) {
+            // Toggle direction if same column, otherwise reset to desc
+            if (pivotSortState.column === column) {
+                pivotSortState.direction = pivotSortState.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                pivotSortState.column = column;
+                pivotSortState.direction = column === 'category' ? 'asc' : 'desc';
+            }
+
+            // Re-render table with current data
+            if (pivotData) {
+                renderPivotTable(pivotData);
+            }
+        }
+
+        // Handle pivot table cell click - activate cell and filter chart/table
+        async function handlePivotCellClick(categoryKey, categoryName, colIndex, label) {
+            const dateRange = pivotDateRanges[colIndex];
+
+            if (!dateRange) {
+                console.warn('Could not determine date range for column:', label);
+                return;
+            }
+
+            // Toggle active cell - if clicking same cell, deactivate
+            const isSameCell = activePivotCell &&
+                activePivotCell.rowKey === categoryKey &&
+                activePivotCell.colIndex === colIndex;
+
+            if (isSameCell) {
+                // Deactivate - clear selection
+                activePivotCell = null;
+                // Re-render pivot table to remove highlighting
+                renderPivotTable(pivotData);
+                return;
+            }
+
+            // Set new active cell
+            activePivotCell = { rowKey: categoryKey, colIndex: colIndex };
+
+            // Re-render pivot table to show active/dimmed states
+            renderPivotTable(pivotData);
+
+            // Build the new state for chart and transactions table
+            const newState = {
+                page: 1
+            };
+
+            // Set date range to the clicked period
+            newState.startDate = dateRange.start;
+            newState.endDate = dateRange.end;
+
+            // Update date inputs visually
+            document.getElementById('startDateFilter').value = dateRange.start;
+            document.getElementById('endDateFilter').value = dateRange.end;
+
+            // Handle category filtering based on current view
+            if (chartState.viewType === 'overview') {
+                // In overview, categoryKey is 'expenses' or 'income'
+                newState.viewType = categoryKey;
+                newState.category = '';
+            } else if (!chartState.category) {
+                // In expenses/income view without category filter
+                // categoryKey is the category name, drill down to it
+                newState.category = categoryKey;
+            } else {
+                // Already at subcategory level - just filter by date
+                // Keep current category/subcategory
+            }
+
+            // Update chart and table (NOT pivot table - it keeps its data)
+            Object.assign(chartState, newState);
+            updateUrl(true);
+            updateUIState();
+
+            // Fetch and update only chart and transactions table
+            const tableHtml = await fetchTableHtml();
+            document.getElementById('tableContainer').innerHTML = tableHtml;
+            rebindTableHandlers();
         }
 
         // Drill down from overview to expenses or income view
@@ -2069,6 +2694,9 @@
 
         // Main state update function - updates chart, table, URL, and UI
         async function updateState(changes, pushHistory = true) {
+            // Clear active pivot cell when filters change
+            activePivotCell = null;
+
             // Apply changes to state
             Object.assign(chartState, changes);
 
